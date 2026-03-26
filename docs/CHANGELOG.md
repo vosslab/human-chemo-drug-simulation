@@ -1,3 +1,41 @@
+## 2026-03-23
+
+### Additions and New Features
+
+- Added a browser-based chemotherapy teaching simulation assembled from modular files in `parts/` and built into `output/chemotherapy_body_simulation.html`.
+- Added named regimen presets, a concentration timeline, and a stylized body-flow visualization for bloodstream, liver, kidney, and tumor activity.
+- Added focused web build tests in `tests/web/test_web_build.py`.
+- Expanded the interaction model to include manual dose timing, patient vitality tracking, and stochastic body processing.
+
+### Behavior or Interface Changes
+
+- Replaced the template README with project-specific quick-start instructions for building and testing the simulation.
+- Added [docs/USAGE.md](docs/USAGE.md) and [docs/active_plans/CHEMOTHERAPY_BODY_SIMULATION_PLAN.md](docs/active_plans/CHEMOTHERAPY_BODY_SIMULATION_PLAN.md) to document the current app and implementation plan.
+- Added direct organ labels to the body diagram so bloodstream, liver, kidneys, and tumor are readable without relying on the status cards.
+- Expanded the body view with a large tumor, stochastic response labels, shrinking tumor readouts, and patient status feedback.
+- Simplified the front-panel controls and extended the default simulation window from 336 hours to 720 hours.
+
+### Fixes and Maintenance
+
+- Added `parts/CONTRACTS.md` and a single-file build script to keep simulation data flow and assembly order explicit.
+
+### Removals and Deprecations
+
+- None.
+
+### Decisions and Failures
+
+- Chose SVG-based chart and body rendering for the first release so the app stays dependency-free and easy to build into one HTML file.
+- Replaced the initial fixed decay approach with a stochastic response model so tumor behavior can vary by run without relying on a precomputed seed.
+
+### Developer Tests and Notes
+
+- `bash build_app.sh`
+- `node --check parts/constants.js && node --check parts/regimen_engine.js && node --check parts/pk_engine.js && node --check parts/game_state.js && node --check parts/chart_stage.js && node --check parts/body_visual.js && node --check parts/ui_rendering.js && node --check parts/init.js`
+- `source source_me.sh && python3 -m pytest tests/web/test_web_build.py -q`
+- `REPO_HYGIENE_SCOPE=changed source source_me.sh && python3 -m pytest tests/test_ascii_compliance.py -q`
+- `REPO_HYGIENE_SCOPE=changed source source_me.sh && python3 -m pytest tests/test_pyflakes_code_lint.py -q`
+
 ## 2026-02-25
 
 ### Fixes and Maintenance

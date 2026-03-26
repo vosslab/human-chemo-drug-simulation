@@ -1,20 +1,33 @@
-# starter_repo_template
-`starter_repo_template` is canonical bootstrap infrastructure for Python repositories that need consistent repository policy, Python style conventions, licensing boundaries, and test/lint scaffolding before project-specific code is added.
+# human-chemo-drug-simulation
 
-Only `README.md` and `docs/CHANGELOG.md` are intentionally repository-specific; every other file is designed to remain generic for downstream template users.
+`human-chemo-drug-simulation` is a browser-based teaching demo that visualizes how chemotherapy
+drug concentration changes over time in a simplified human body. The app combines named regimen
+presets, manual dose timing, patient vitality tracking, and a stochastic concentration-and-
+response model with tumor shrinkage across a longer 30-day window in one self-contained HTML file.
 
 ## Documentation
 
+- [docs/USAGE.md](docs/USAGE.md): Build and test commands for the web app.
+- [docs/active_plans/CHEMOTHERAPY_BODY_SIMULATION_PLAN.md](docs/active_plans/CHEMOTHERAPY_BODY_SIMULATION_PLAN.md): Current implementation plan and scope notes.
+- [docs/CHANGELOG.md](docs/CHANGELOG.md): Repository-specific history of changes.
 - [docs/REPO_STYLE.md](docs/REPO_STYLE.md): Repository structure, naming, versioning, dependency manifest, and licensing conventions.
 - [docs/PYTHON_STYLE.md](docs/PYTHON_STYLE.md): Python implementation rules for formatting, structure, imports, argparse, and testing.
 - [docs/MARKDOWN_STYLE.md](docs/MARKDOWN_STYLE.md): Markdown writing and formatting conventions for repository documentation.
-- [docs/AUTHORS.md](docs/AUTHORS.md): Canonical authorship and attribution metadata for template maintenance.
-- [docs/CHANGELOG.md](docs/CHANGELOG.md): Repository-specific history of updates to this template.
 
 ## Quick start
 
-Run one focused repo check:
+Build the self-contained HTML page:
 
 ```bash
-/opt/homebrew/opt/python@3.12/bin/python3.12 -m pytest tests/test_shebangs.py -q
+bash build_app.sh
+```
+
+Open [output/chemotherapy_body_simulation.html](output/chemotherapy_body_simulation.html) in a browser.
+
+## Testing
+
+Run the focused web build check:
+
+```bash
+source source_me.sh && python3 -m pytest tests/web/test_web_build.py -q
 ```
