@@ -64,8 +64,30 @@ function chemoInitBindControls() {
 }
 
 // ============================================
-// Bind custom dosing controls (inside collapsible section)
+// Bind protocol adjustment and custom dosing controls
 function chemoInitBindCustomDosing() {
+	// dose multiplier slider: scales all regimen doses
+	document.getElementById("dose-multiplier-slider").addEventListener("input", function(event) {
+		chemoStateStopPlayback();
+		CHEMO_STATE.doseMultiplier = parseFloat(event.target.value);
+		document.getElementById("dose-multiplier-value").textContent = CHEMO_STATE.doseMultiplier.toFixed(2) + "x";
+		CHEMO_STATE.currentSampleIndex = 0;
+		CHEMO_STATE.simulationRunId += 1;
+		chemoStateRebuildSimulation();
+		chemoUiRenderAll();
+	});
+
+	// cycle count slider: repeats the full dose schedule
+	document.getElementById("cycle-count-slider").addEventListener("input", function(event) {
+		chemoStateStopPlayback();
+		CHEMO_STATE.cycleCount = parseInt(event.target.value, 10);
+		document.getElementById("cycle-count-value").textContent = CHEMO_STATE.cycleCount;
+		CHEMO_STATE.currentSampleIndex = 0;
+		CHEMO_STATE.simulationRunId += 1;
+		chemoStateRebuildSimulation();
+		chemoUiRenderAll();
+	});
+
 	// tumor sensitivity slider
 	document.getElementById("tumor-sensitivity-slider").addEventListener("input", function(event) {
 		chemoStateStopPlayback();
@@ -107,35 +129,6 @@ function chemoInitBindCustomDosing() {
 }
 
 // ============================================
-// Wire up collapsible toggle for custom dosing section
-function chemoInitBindCollapsible() {
-	var toggle = document.getElementById("toggle-custom-dosing");
-	var panel = document.getElementById("custom-dosing-panel");
-	if (!toggle || !panel) {
-		return;
-	}
-	toggle.addEventListener("click", function() {
-		var expanded = toggle.getAttribute("aria-expanded") === "true";
-		if (expanded) {
-			// collapse
-			panel.style.display = "none";
-			toggle.setAttribute("aria-expanded", "false");
-		} else {
-			// expand
-			panel.style.display = "block";
-			toggle.setAttribute("aria-expanded", "true");
-		}
-	});
-	// allow Enter and Space to toggle (keyboard accessibility)
-	toggle.addEventListener("keydown", function(event) {
-		if (event.key === "Enter" || event.key === " ") {
-			event.preventDefault();
-			toggle.click();
-		}
-	});
-}
-
-// ============================================
 // Main bootstrap function
 function chemoInitBootstrap() {
 	// build initial simulation
@@ -146,7 +139,6 @@ function chemoInitBootstrap() {
 	chemoInitBindPresetButtons();
 	chemoInitBindControls();
 	chemoInitBindCustomDosing();
-	chemoInitBindCollapsible();
 }
 
 // ============================================

@@ -12,10 +12,50 @@
 		</p>
 	</header>
 
-	<!-- Regimen presets: primary entry point -->
+	<!-- Controls: presets + dosing + playback -->
 	<section class="controls-bar">
-		<div class="preset-row">
-			<div id="preset-button-grid" class="preset-grid"></div>
+		<div class="controls-top">
+			<div class="preset-col">
+				<div class="section-label">Regimen Presets</div>
+				<div id="preset-button-grid" class="preset-grid"></div>
+			</div>
+			<div class="dosing-col">
+				<div class="section-label">Adjust Protocol</div>
+				<div class="dosing-controls">
+					<div class="control-group">
+						<label for="dose-multiplier-slider">
+							Dose multiplier <strong id="dose-multiplier-value">1.0x</strong>
+						</label>
+						<input id="dose-multiplier-slider" type="range" min="0.25" max="4" step="0.25" value="1">
+					</div>
+					<div class="control-group">
+						<label for="cycle-count-slider">
+							Cycles <strong id="cycle-count-value">1</strong>
+						</label>
+						<input id="cycle-count-slider" type="range" min="1" max="4" step="1" value="1">
+					</div>
+				</div>
+				<div class="section-label" style="margin-top: 6px;">Add Single Dose</div>
+				<div class="dosing-controls">
+					<div class="control-group">
+						<label for="manual-drug-select">Drug</label>
+						<select id="manual-drug-select" class="select-input"></select>
+					</div>
+					<div class="control-group dose-row">
+						<label for="manual-dose-amount-slider">
+							<strong id="manual-dose-amount-value">120</strong> mg at hour
+							<strong id="manual-dose-time-value">24</strong>
+						</label>
+						<input id="manual-dose-amount-slider" type="range" min="10" max="5000" step="10" value="120">
+						<input id="manual-dose-time-slider" type="range" min="0" max="720" step="2" value="24">
+					</div>
+				</div>
+				<div class="dosing-actions">
+					<button id="add-dose-button" class="action-button" type="button">Add dose</button>
+					<button id="clear-doses-button" class="action-button" type="button">Clear</button>
+				</div>
+				<div id="manual-dose-list" class="dose-list"></div>
+			</div>
 		</div>
 		<div class="playback-bar">
 			<button id="play-button" class="action-button play-btn" type="button">Play</button>
@@ -26,6 +66,11 @@
 				<label for="playback-speed-slider">Speed</label>
 				<input id="playback-speed-slider" type="range" min="0.5" max="4" step="0.5" value="1">
 				<strong id="playback-speed-value">1.0x</strong>
+			</div>
+			<div class="speed-control">
+				<label for="tumor-sensitivity-slider">Tumor sensitivity</label>
+				<input id="tumor-sensitivity-slider" type="range" min="0.6" max="1.5" step="0.01" value="1.00">
+				<strong id="tumor-sensitivity-value">1.00x</strong>
 			</div>
 		</div>
 	</section>
@@ -78,44 +123,6 @@
 		<div class="stat-chip">
 			<span>Status</span>
 			<strong id="metric-life-status">Stable</strong>
-		</div>
-	</section>
-
-	<!-- Collapsible: explore custom dosing -->
-	<section class="collapsible-section">
-		<button id="toggle-custom-dosing" class="collapsible-toggle" type="button" aria-expanded="false">
-			Explore custom dosing (educational)
-		</button>
-		<div id="custom-dosing-panel" class="collapsible-content" style="display: none;">
-			<div class="custom-dose-grid">
-				<div class="control-group">
-					<label for="manual-drug-select">Drug</label>
-					<select id="manual-drug-select" class="select-input"></select>
-				</div>
-				<div class="control-group">
-					<label for="manual-dose-time-slider">
-						Dose time <strong id="manual-dose-time-value">24 h</strong>
-					</label>
-					<input id="manual-dose-time-slider" type="range" min="0" max="720" step="2" value="24">
-				</div>
-				<div class="control-group">
-					<label for="manual-dose-amount-slider">
-						Dose amount <strong id="manual-dose-amount-value">120 mg</strong>
-					</label>
-					<input id="manual-dose-amount-slider" type="range" min="20" max="1200" step="10" value="120">
-				</div>
-				<div class="control-group">
-					<label for="tumor-sensitivity-slider">
-						Tumor response sensitivity <strong id="tumor-sensitivity-value">1.00x</strong>
-					</label>
-					<input id="tumor-sensitivity-slider" type="range" min="0.6" max="1.5" step="0.01" value="1.00">
-				</div>
-			</div>
-			<div class="custom-dose-actions">
-				<button id="add-dose-button" class="action-button" type="button">Add dose</button>
-				<button id="clear-doses-button" class="action-button" type="button">Clear doses</button>
-			</div>
-			<div id="manual-dose-list" class="dose-list"></div>
 		</div>
 	</section>
 

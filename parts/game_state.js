@@ -4,6 +4,9 @@ var CHEMO_STATE = {
 	tumorSensitivity: 1,
 	playbackSpeed: 1,
 	simulationRunId: 1,
+	// protocol modifiers
+	doseMultiplier: 1.0,
+	cycleCount: 1,
 	// configurable patient parameters
 	bsa: SIM_DEFAULTS.patientBSA,
 	weightKg: SIM_DEFAULTS.patientWeightKg,

@@ -1,0 +1,2111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chemotherapy Body Simulation</title>
+<style>
+/* ============================================ */
+/* Chemotherapy Teaching Simulation -- Styles   */
+/* Interaction-first layout                     */
+/* ============================================ */
+
+/* Reset and base */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+	font-family: 'Avenir Next', 'Segoe UI', system-ui, -apple-system, sans-serif;
+	background: #f5f3ef;
+	color: #1f2a33;
+	line-height: 1.5;
+}
+
+.page-shell {
+	max-width: 1080px;
+	margin: 0 auto;
+	padding: 12px 16px;
+}
+
+/* ============================================ */
+/* Header: compact title + orientation          */
+/* ============================================ */
+.app-header {
+	margin-bottom: 10px;
+}
+.header-top {
+	display: flex;
+	align-items: baseline;
+	gap: 16px;
+	flex-wrap: wrap;
+}
+.header-top h1 {
+	font-size: 1.4rem;
+	font-weight: 700;
+	color: #1f2a33;
+}
+.header-disclaimer {
+	font-size: 0.78rem;
+	color: #8a7e6f;
+	font-weight: 500;
+	letter-spacing: 0.02em;
+}
+.header-orientation {
+	font-size: 0.88rem;
+	color: #5b6a73;
+	margin-top: 2px;
+}
+
+/* ============================================ */
+/* Controls bar: presets + playback              */
+/* ============================================ */
+.controls-bar {
+	background: #fffdf8;
+	border: 1px solid #e2ded6;
+	border-radius: 12px;
+	padding: 10px 14px;
+	margin-bottom: 10px;
+}
+.controls-top {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 14px;
+	margin-bottom: 8px;
+}
+.section-label {
+	font-size: 0.78rem;
+	font-weight: 600;
+	color: #8a7e6f;
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+	margin-bottom: 6px;
+}
+.preset-col, .dosing-col {
+	min-width: 0;
+}
+.preset-grid {
+	display: flex;
+	gap: 6px;
+	flex-wrap: wrap;
+}
+.dosing-controls {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	margin-bottom: 6px;
+}
+.dosing-actions {
+	display: flex;
+	gap: 6px;
+	margin-bottom: 4px;
+}
+.preset-button {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	padding: 8px 14px;
+	border: 2px solid #d7d2c7;
+	border-radius: 10px;
+	background: #fffdf8;
+	cursor: pointer;
+	transition: border-color 0.15s, background 0.15s;
+	font-family: inherit;
+	min-width: 140px;
+}
+.preset-button:hover {
+	border-color: #ba4a2f;
+	background: #fdf6f0;
+}
+.preset-button:focus-visible {
+	outline: 2px solid #ba4a2f;
+	outline-offset: 2px;
+}
+.preset-button.is-active {
+	border-color: #ba4a2f;
+	background: #faf0ea;
+}
+.preset-title {
+	font-weight: 700;
+	font-size: 1rem;
+}
+.preset-subtitle {
+	font-size: 0.78rem;
+	color: #5b6a73;
+}
+.preset-note {
+	font-size: 0.72rem;
+	color: #8a7e6f;
+}
+.playback-bar {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	flex-wrap: wrap;
+}
+.action-button {
+	padding: 6px 14px;
+	border: 1px solid #d7d2c7;
+	border-radius: 6px;
+	background: #fffdf8;
+	cursor: pointer;
+	font-family: inherit;
+	font-size: 0.85rem;
+	font-weight: 600;
+	transition: background 0.12s;
+}
+.action-button:hover {
+	background: #f0ece4;
+}
+.action-button:focus-visible {
+	outline: 2px solid #ba4a2f;
+	outline-offset: 2px;
+}
+.play-btn {
+	background: #3a8a5c;
+	color: #fff;
+	border-color: #2d7049;
+}
+.play-btn:hover {
+	background: #2d7049;
+}
+.speed-control {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	margin-left: 8px;
+	font-size: 0.85rem;
+}
+.speed-control label {
+	color: #5b6a73;
+}
+.speed-control input[type="range"] {
+	width: 80px;
+}
+
+/* ============================================ */
+/* Visualization grid: chart + body             */
+/* ============================================ */
+.visual-grid {
+	display: grid;
+	grid-template-columns: 1.4fr 1fr;
+	gap: 10px;
+	margin-bottom: 8px;
+}
+.panel {
+	background: #fffdf8;
+	border: 1px solid #e2ded6;
+	border-radius: 12px;
+	padding: 12px;
+}
+.panel h2 {
+	font-size: 0.88rem;
+	font-weight: 600;
+	color: #5b6a73;
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+	margin-bottom: 8px;
+}
+.chart-wrap {
+	min-height: 260px;
+}
+.chart-svg {
+	width: 100%;
+	height: auto;
+	display: block;
+}
+.body-card {
+	min-height: 260px;
+}
+.body-svg {
+	width: 100%;
+	height: auto;
+	display: block;
+}
+.footer-note {
+	font-size: 0.82rem;
+	color: #5b6a73;
+	margin-top: 6px;
+}
+
+/* Legend */
+.legend-row {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 10px;
+	margin-top: 6px;
+}
+.legend-chip {
+	display: flex;
+	align-items: center;
+	gap: 5px;
+	font-size: 0.82rem;
+}
+.legend-swatch {
+	display: inline-block;
+	width: 10px;
+	height: 10px;
+	border-radius: 50%;
+}
+
+/* ============================================ */
+/* Time scrubber                                */
+/* ============================================ */
+.scrubber-section {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	padding: 6px 14px;
+	background: #fffdf8;
+	border: 1px solid #e2ded6;
+	border-radius: 8px;
+	margin-bottom: 8px;
+}
+.scrubber-label {
+	font-size: 0.85rem;
+	display: flex;
+	gap: 6px;
+	align-items: center;
+	white-space: nowrap;
+}
+.scrubber-section input[type="range"] {
+	flex: 1;
+}
+
+/* ============================================ */
+/* Stats strip                                  */
+/* ============================================ */
+.stats-strip {
+	display: flex;
+	gap: 8px;
+	margin-bottom: 8px;
+	flex-wrap: wrap;
+}
+.stat-chip {
+	flex: 1;
+	min-width: 100px;
+	background: #fffdf8;
+	border: 1px solid #e2ded6;
+	border-radius: 8px;
+	padding: 6px 10px;
+	text-align: center;
+}
+.stat-chip span {
+	display: block;
+	font-size: 0.72rem;
+	color: #8a7e6f;
+	text-transform: uppercase;
+	letter-spacing: 0.03em;
+}
+.stat-chip strong {
+	font-size: 1rem;
+	color: #1f2a33;
+}
+
+/* ============================================ */
+/* Dosing controls (inside controls-bar)        */
+/* ============================================ */
+.control-group label {
+	display: block;
+	font-size: 0.82rem;
+	color: #5b6a73;
+	margin-bottom: 2px;
+}
+.control-group input[type="range"] {
+	width: 100%;
+}
+.select-input {
+	width: 100%;
+	padding: 4px 8px;
+	border: 1px solid #d7d2c7;
+	border-radius: 6px;
+	font-family: inherit;
+	font-size: 0.85rem;
+	background: #fff;
+}
+.dose-list {
+	font-size: 0.82rem;
+	color: #5b6a73;
+}
+.dose-chip {
+	padding: 3px 8px;
+	background: #f5f3ef;
+	border-radius: 4px;
+	margin-bottom: 3px;
+}
+
+/* ============================================ */
+/* Teaching notes                               */
+/* ============================================ */
+.teaching-section {
+	margin-bottom: 8px;
+}
+.note-card {
+	background: #fffdf8;
+	border: 1px solid #e2ded6;
+	border-radius: 8px;
+	padding: 12px 14px;
+}
+.note-card h3 {
+	font-size: 0.88rem;
+	font-weight: 600;
+	color: #5b6a73;
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+	margin-bottom: 6px;
+}
+.teaching-list {
+	padding-left: 18px;
+	font-size: 0.88rem;
+	color: #1f2a33;
+}
+.teaching-list li {
+	margin-bottom: 4px;
+}
+.model-note {
+	font-size: 0.78rem;
+	color: #8a7e6f;
+	margin-top: 8px;
+	font-style: italic;
+}
+
+/* ============================================ */
+/* Health bar                                   */
+/* ============================================ */
+.health-bar-shell {
+	margin-top: 8px;
+}
+.health-bar-label {
+	display: flex;
+	justify-content: space-between;
+	font-size: 0.82rem;
+}
+.health-bar-track {
+	height: 10px;
+	background: #e2ded6;
+	border-radius: 5px;
+	margin-top: 3px;
+	overflow: hidden;
+}
+.health-bar-fill {
+	height: 100%;
+	border-radius: 5px;
+	transition: width 0.3s;
+}
+
+/* ============================================ */
+/* Footer                                       */
+/* ============================================ */
+.app-footer {
+	text-align: center;
+	padding: 8px 0;
+	font-size: 0.78rem;
+	color: #8a7e6f;
+}
+
+/* ============================================ */
+/* Responsive: stack on narrow screens          */
+/* ============================================ */
+@media (max-width: 680px) {
+	.visual-grid {
+		grid-template-columns: 1fr;
+	}
+	.custom-dose-grid {
+		grid-template-columns: 1fr;
+	}
+	.stats-strip {
+		display: grid;
+		grid-template-columns: 1fr 1fr 1fr;
+	}
+	.controls-top {
+		grid-template-columns: 1fr;
+	}
+	.preset-grid {
+		flex-direction: column;
+	}
+}
+
+</style>
+</head>
+<body>
+<div class="page-shell">
+	<!-- Compact header: title + orientation -->
+	<header class="app-header">
+		<div class="header-top">
+			<h1>Chemotherapy Teaching Simulation</h1>
+			<span class="header-disclaimer">Educational use only</span>
+		</div>
+		<p class="header-orientation">
+			Modeled drug exposure and distribution over a treatment cycle.
+			Higher intensity indicates higher organ exposure.
+		</p>
+	</header>
+
+	<!-- Controls: presets + dosing + playback -->
+	<section class="controls-bar">
+		<div class="controls-top">
+			<div class="preset-col">
+				<div class="section-label">Regimen Presets</div>
+				<div id="preset-button-grid" class="preset-grid"></div>
+			</div>
+			<div class="dosing-col">
+				<div class="section-label">Adjust Protocol</div>
+				<div class="dosing-controls">
+					<div class="control-group">
+						<label for="dose-multiplier-slider">
+							Dose multiplier <strong id="dose-multiplier-value">1.0x</strong>
+						</label>
+						<input id="dose-multiplier-slider" type="range" min="0.25" max="4" step="0.25" value="1">
+					</div>
+					<div class="control-group">
+						<label for="cycle-count-slider">
+							Cycles <strong id="cycle-count-value">1</strong>
+						</label>
+						<input id="cycle-count-slider" type="range" min="1" max="4" step="1" value="1">
+					</div>
+				</div>
+				<div class="section-label" style="margin-top: 6px;">Add Single Dose</div>
+				<div class="dosing-controls">
+					<div class="control-group">
+						<label for="manual-drug-select">Drug</label>
+						<select id="manual-drug-select" class="select-input"></select>
+					</div>
+					<div class="control-group dose-row">
+						<label for="manual-dose-amount-slider">
+							<strong id="manual-dose-amount-value">120</strong> mg at hour
+							<strong id="manual-dose-time-value">24</strong>
+						</label>
+						<input id="manual-dose-amount-slider" type="range" min="10" max="5000" step="10" value="120">
+						<input id="manual-dose-time-slider" type="range" min="0" max="720" step="2" value="24">
+					</div>
+				</div>
+				<div class="dosing-actions">
+					<button id="add-dose-button" class="action-button" type="button">Add dose</button>
+					<button id="clear-doses-button" class="action-button" type="button">Clear</button>
+				</div>
+				<div id="manual-dose-list" class="dose-list"></div>
+			</div>
+		</div>
+		<div class="playback-bar">
+			<button id="play-button" class="action-button play-btn" type="button">Play</button>
+			<button id="pause-button" class="action-button" type="button">Pause</button>
+			<button id="reset-button" class="action-button" type="button">Reset</button>
+			<button id="step-button" class="action-button" type="button">Step</button>
+			<div class="speed-control">
+				<label for="playback-speed-slider">Speed</label>
+				<input id="playback-speed-slider" type="range" min="0.5" max="4" step="0.5" value="1">
+				<strong id="playback-speed-value">1.0x</strong>
+			</div>
+			<div class="speed-control">
+				<label for="tumor-sensitivity-slider">Tumor sensitivity</label>
+				<input id="tumor-sensitivity-slider" type="range" min="0.6" max="1.5" step="0.01" value="1.00">
+				<strong id="tumor-sensitivity-value">1.00x</strong>
+			</div>
+		</div>
+	</section>
+
+	<!-- Main visualization: chart + body side by side -->
+	<section class="visual-grid">
+		<div class="panel chart-wrap">
+			<h2>Concentration Timeline</h2>
+			<div id="chart-root"></div>
+			<div id="chart-legend" class="legend-row"></div>
+		</div>
+		<div class="panel body-card">
+			<h2>Body Flow View</h2>
+			<div id="body-visual-root"></div>
+			<div id="patient-health-bar-root"></div>
+		</div>
+	</section>
+
+	<!-- Time scrubber: full width -->
+	<section class="scrubber-section">
+		<label class="scrubber-label" for="time-scrubber">
+			<span>Time</span>
+			<strong id="time-label">0 h</strong>
+		</label>
+		<input id="time-scrubber" type="range" min="0" max="1" step="1" value="0">
+	</section>
+
+	<!-- Stats strip: compact metrics -->
+	<section class="stats-strip">
+		<div class="stat-chip">
+			<span>Current burden</span>
+			<strong id="metric-total-burden">0 mg/L</strong>
+		</div>
+		<div class="stat-chip">
+			<span>Max burden</span>
+			<strong id="metric-peak-exposure">0 mg/L</strong>
+		</div>
+		<div class="stat-chip">
+			<span>Tumor size</span>
+			<strong id="metric-tumor-volume">100%</strong>
+		</div>
+		<div class="stat-chip">
+			<span>Response</span>
+			<strong id="metric-response-chance">0%</strong>
+		</div>
+		<div class="stat-chip">
+			<span>Patient health</span>
+			<strong id="metric-patient-vitality">100%</strong>
+		</div>
+		<div class="stat-chip">
+			<span>Status</span>
+			<strong id="metric-life-status">Stable</strong>
+		</div>
+	</section>
+
+	<!-- Teaching notes: contextual, shown when regimen selected -->
+	<section class="teaching-section">
+		<div class="note-card" id="teaching-notes-card">
+			<h3>Teaching Notes</h3>
+			<ul id="teaching-notes-list" class="teaching-list"></ul>
+			<p class="model-note">
+				Simulated response is illustrative, not patient-specific.
+				Model shows relative trends, not clinical predictions.
+			</p>
+		</div>
+	</section>
+
+	<!-- Regimen warning text (hidden, used by JS) -->
+	<span id="regimen-warning-text" style="display: none;"></span>
+	<!-- Manual drug label (hidden, used by JS) -->
+	<strong id="manual-drug-label" style="display: none;">Doxorubicin</strong>
+	<!-- Hidden metric for backward compat -->
+	<span id="metric-regimen-name" style="display: none;">ABVD</span>
+	<span id="metric-clearance" style="display: none;">0%</span>
+	<!-- Body status root (hidden, organ info now on diagram) -->
+	<div id="body-status-root" style="display: none;"></div>
+	<!-- Organ guide (removed, info on diagram labels) -->
+	<div id="organ-guide-root" style="display: none;"></div>
+
+	<!-- Footer disclaimer -->
+	<footer class="app-footer">
+		<p>Educational use only. Not for clinical dosing decisions.</p>
+	</footer>
+</div>
+
+<script>
+// ============================================
+// constants.js -- Drug PK data, regimen presets, and simulation defaults
+// ============================================
+// Canonical unit system:
+//   Time: minutes (internally), display adapts to min/hr/days
+//   Drug amount: mg (regimen source doses are mg/m2, converted at dose-event build time)
+//   Volume: L total (source Vd is L/kg, converted at concentration calculation time)
+//   Concentration: mg/L
+//   Half-life: minutes (stored in DRUG_DATA)
+// ============================================
+
+// Default simulation parameters
+var SIM_DEFAULTS = {
+	patientWeightKg: 70,
+	patientBSA: 1.7,
+	// sample interval in minutes (2 hours)
+	timeStepMinutes: 120,
+	// total simulation duration in minutes (720 hours = 30 days)
+	defaultDurationMinutes: 43200,
+	// derived: expected sample count = duration / interval + 1 = 361
+	defaultSpeed: 1,
+};
+
+// ============================================
+// Organ extraction ratios for deriving organ concentrations from plasma
+// Keyed by clearance route: hepatic, renal, biliary
+var ORGAN_EXTRACTION = {
+	liver: {
+		hepatic: 0.7,
+		renal: 0.2,
+		biliary: 0.5,
+	},
+	kidney: {
+		hepatic: 0.2,
+		renal: 0.7,
+		biliary: 0.1,
+	},
+	tissue: {
+		hepatic: 0.3,
+		renal: 0.3,
+		biliary: 0.3,
+	},
+};
+
+// ============================================
+// Visual channel colors and organ info for body visualization
+var CHEMO_VIS_CHANNELS = [
+	{ key: "bloodstream", label: "Bloodstream", color: "#d65050" },
+	{ key: "liver", label: "Liver", color: "#dd8b3d" },
+	{ key: "kidney", label: "Kidneys", color: "#4a7db2" },
+	{ key: "tumor", label: "Tumor", color: "#7e5bd6" },
+];
+
+var CHEMO_ORGAN_INFO = [
+	{ key: "bloodstream", label: "Bloodstream", role: "Carries the drug rapidly through the body right after dosing." },
+	{ key: "liver", label: "Liver", role: "Breaks down and processes much of the chemotherapy burden." },
+	{ key: "kidney", label: "Kidneys", role: "Clear water-soluble drug and metabolites from circulation." },
+	{ key: "tumor", label: "Tumor", role: "Receives exposure that can reduce tumor mass over time." },
+];
+
+// ============================================
+// Drug pharmacokinetic parameter database
+// Source units: vdLPerKg (L/kg), halfLife in minutes, dose in mg/m2
+// Vd is converted to total L at concentration calculation time
+// Doses are converted to mg at dose-event build time using current BSA
+var DRUG_DATA = {
+	fluorouracil: {
+		id: "fluorouracil",
+		name: "5-Fluorouracil",
+		abbreviation: "5-FU",
+		compartments: 1,
+		halfLifeMinutes: 14,
+		halfLifeAlphaMinutes: null,
+		halfLifeBetaMinutes: null,
+		vdLPerKg: 0.25,
+		typicalDoseMgM2: 500,
+		primaryOrgan: "liver",
+		excretionOrgan: "kidney",
+		color: "#FF6B35",
+		// body affinity ratios for visual rendering
+		bodyAffinity: { bloodstream: 1.25, liver: 0.55, kidney: 0.5, tumor: 1.2 },
+		infusionHours: 46,
+		description: "Antimetabolite that inhibits thymidylate synthase. "
+			+ "Very short plasma half-life (14 min) due to rapid hepatic metabolism.",
+	},
+	doxorubicin: {
+		id: "doxorubicin",
+		name: "Doxorubicin",
+		abbreviation: "DOX",
+		compartments: 2,
+		halfLifeMinutes: null,
+		halfLifeAlphaMinutes: 5,
+		halfLifeBetaMinutes: 1800,
+		vdLPerKg: 0.34,
+		typicalDoseMgM2: 60,
+		primaryOrgan: "liver",
+		excretionOrgan: "bile",
+		color: "#D62828",
+		bodyAffinity: { bloodstream: 1.2, liver: 0.9, kidney: 0.4, tumor: 1.0 },
+		infusionHours: 1,
+		description: "Anthracycline that intercalates DNA. "
+			+ "Biphasic elimination: rapid distribution (5 min) then slow terminal (30 hr). "
+			+ "Cardiotoxicity risk.",
+	},
+	cisplatin: {
+		id: "cisplatin",
+		name: "Cisplatin",
+		abbreviation: "CDDP",
+		compartments: 2,
+		halfLifeMinutes: null,
+		halfLifeAlphaMinutes: 25,
+		halfLifeBetaMinutes: 4320,
+		vdLPerKg: 0.5,
+		typicalDoseMgM2: 75,
+		primaryOrgan: "kidney",
+		excretionOrgan: "kidney",
+		color: "#1B9AAA",
+		bodyAffinity: { bloodstream: 1.0, liver: 0.5, kidney: 1.1, tumor: 0.9 },
+		infusionHours: 2,
+		description: "Platinum-based alkylating agent that crosslinks DNA. "
+			+ "Free drug clears in ~25 min, protein-bound platinum persists for days.",
+	},
+	methotrexate: {
+		id: "methotrexate",
+		name: "Methotrexate",
+		abbreviation: "MTX",
+		compartments: 1,
+		halfLifeMinutes: 480,
+		halfLifeAlphaMinutes: null,
+		halfLifeBetaMinutes: null,
+		vdLPerKg: 0.8,
+		typicalDoseMgM2: 40,
+		primaryOrgan: "kidney",
+		excretionOrgan: "kidney",
+		color: "#6A4C93",
+		bodyAffinity: { bloodstream: 0.9, liver: 0.5, kidney: 1.2, tumor: 0.85 },
+		infusionHours: 0.5,
+		description: "Antifolate that inhibits DHFR. "
+			+ "Primarily eliminated unchanged by kidneys (80-90% in 24 hr).",
+	},
+	cyclophosphamide: {
+		id: "cyclophosphamide",
+		name: "Cyclophosphamide",
+		abbreviation: "CPA",
+		compartments: 1,
+		halfLifeMinutes: 360,
+		halfLifeAlphaMinutes: null,
+		halfLifeBetaMinutes: null,
+		vdLPerKg: 0.6,
+		typicalDoseMgM2: 750,
+		primaryOrgan: "liver",
+		excretionOrgan: "kidney",
+		color: "#E07A5F",
+		bodyAffinity: { bloodstream: 1.0, liver: 1.1, kidney: 0.6, tumor: 0.9 },
+		infusionHours: 1,
+		description: "Nitrogen mustard prodrug activated by hepatic P450. "
+			+ "Half-life ~6 hours.",
+	},
+	bleomycin: {
+		id: "bleomycin",
+		name: "Bleomycin",
+		abbreviation: "BLEO",
+		compartments: 1,
+		halfLifeMinutes: 120,
+		halfLifeAlphaMinutes: null,
+		halfLifeBetaMinutes: null,
+		vdLPerKg: 0.29,
+		typicalDoseMgM2: 10,
+		primaryOrgan: "kidney",
+		excretionOrgan: "kidney",
+		color: "#2B7A78",
+		bodyAffinity: { bloodstream: 1.0, liver: 0.5, kidney: 1.1, tumor: 0.8 },
+		infusionHours: 0.75,
+		description: "Glycopeptide antibiotic causing DNA strand breaks. "
+			+ "Half-life ~2 hours. Cumulative pulmonary toxicity is dose-limiting.",
+	},
+	vinblastine: {
+		id: "vinblastine",
+		name: "Vinblastine",
+		abbreviation: "VBL",
+		compartments: 1,
+		halfLifeMinutes: 1440,
+		halfLifeAlphaMinutes: null,
+		halfLifeBetaMinutes: null,
+		vdLPerKg: 0.26,
+		typicalDoseMgM2: 6,
+		primaryOrgan: "liver",
+		excretionOrgan: "bile",
+		color: "#8A5CF5",
+		bodyAffinity: { bloodstream: 0.9, liver: 0.6, kidney: 0.4, tumor: 1.15 },
+		infusionHours: 0.5,
+		description: "Vinca alkaloid that inhibits microtubule assembly. "
+			+ "Half-life ~24 hours. Hepatic metabolism, biliary excretion.",
+	},
+	dacarbazine: {
+		id: "dacarbazine",
+		name: "Dacarbazine",
+		abbreviation: "DTIC",
+		compartments: 1,
+		halfLifeMinutes: 300,
+		halfLifeAlphaMinutes: null,
+		halfLifeBetaMinutes: null,
+		vdLPerKg: 0.37,
+		typicalDoseMgM2: 375,
+		primaryOrgan: "liver",
+		excretionOrgan: "kidney",
+		color: "#EF8D32",
+		bodyAffinity: { bloodstream: 1.1, liver: 0.8, kidney: 0.9, tumor: 0.7 },
+		infusionHours: 1.5,
+		description: "Alkylating agent requiring hepatic activation. "
+			+ "Half-life ~5 hours.",
+	},
+	oxaliplatin: {
+		id: "oxaliplatin",
+		name: "Oxaliplatin",
+		abbreviation: "OXAL",
+		compartments: 2,
+		halfLifeMinutes: null,
+		halfLifeAlphaMinutes: 15,
+		halfLifeBetaMinutes: 1080,
+		vdLPerKg: 0.26,
+		typicalDoseMgM2: 85,
+		primaryOrgan: "kidney",
+		excretionOrgan: "kidney",
+		color: "#3566C6",
+		bodyAffinity: { bloodstream: 1.0, liver: 0.7, kidney: 0.8, tumor: 0.95 },
+		infusionHours: 2,
+		description: "Platinum-based alkylating agent. "
+			+ "Biphasic: rapid initial phase (15 min), prolonged terminal (18 hr).",
+	},
+	leucovorin: {
+		id: "leucovorin",
+		name: "Leucovorin",
+		abbreviation: "LV",
+		compartments: 1,
+		halfLifeMinutes: 360,
+		halfLifeAlphaMinutes: null,
+		halfLifeBetaMinutes: null,
+		vdLPerKg: 0.31,
+		typicalDoseMgM2: 200,
+		primaryOrgan: "liver",
+		excretionOrgan: "kidney",
+		color: "#5BA36E",
+		bodyAffinity: { bloodstream: 0.85, liver: 0.6, kidney: 0.7, tumor: 0.6 },
+		infusionHours: 2,
+		description: "Reduced folate that enhances 5-FU efficacy. "
+			+ "Half-life ~6 hours. Primarily renally excreted.",
+	},
+};
+
+// Ordered list of drug keys for UI rendering
+var DRUG_KEYS = [
+	"fluorouracil", "doxorubicin", "cisplatin", "methotrexate",
+	"cyclophosphamide", "bleomycin", "vinblastine", "dacarbazine",
+	"oxaliplatin", "leucovorin",
+];
+
+// ============================================
+// Chemotherapy regimen presets
+// Source doses in doseMgM2, converted to mg at dose-event build time using current BSA
+var REGIMEN_PRESETS = {
+	abvd: {
+		id: "abvd",
+		name: "ABVD",
+		subtitle: "Hodgkin lymphoma teaching preset",
+		indication: "Hodgkin lymphoma teaching preset",
+		cycleDays: 28,
+		drugKeys: ["doxorubicin", "bleomycin", "vinblastine", "dacarbazine"],
+		drugs: [
+			{ drugKey: "doxorubicin", doseMgM2: 25 },
+			{ drugKey: "bleomycin", doseMgM2: 10 },
+			{ drugKey: "vinblastine", doseMgM2: 6 },
+			{ drugKey: "dacarbazine", doseMgM2: 375 },
+		],
+		primaryDrug: "doxorubicin",
+		// dose days within each cycle (0-indexed from cycle start)
+		doseDays: [0, 14],
+		description: "Doxorubicin, Bleomycin, Vinblastine, Dacarbazine. "
+			+ "Standard first-line for classical Hodgkin lymphoma. "
+			+ "Given on days 1 and 15 of 28-day cycle.",
+		teachingNotes: [
+			"Multiple agents are introduced early, so the combined concentration burden spikes quickly.",
+			"Bleomycin clears faster than doxorubicin, which makes late-cycle exposure profiles diverge.",
+			"The tumor channel stays elevated longer when tissue affinity is high, even as bloodstream levels fall.",
+		],
+		warning: "Illustrative ABVD timing only. The values are generalized for teaching trends.",
+	},
+	folfox: {
+		id: "folfox",
+		name: "FOLFOX",
+		subtitle: "Colorectal cancer teaching preset",
+		indication: "Colorectal cancer teaching preset",
+		cycleDays: 14,
+		drugKeys: ["oxaliplatin", "leucovorin", "fluorouracil"],
+		drugs: [
+			{ drugKey: "fluorouracil", doseMgM2: 400 },
+			{ drugKey: "oxaliplatin", doseMgM2: 85 },
+			{ drugKey: "leucovorin", doseMgM2: 200 },
+		],
+		primaryDrug: "fluorouracil",
+		doseDays: [0],
+		description: "5-Fluorouracil, Oxaliplatin, Leucovorin. "
+			+ "Standard adjuvant and first-line metastatic colorectal cancer regimen.",
+		teachingNotes: [
+			"Oxaliplatin peaks early, while 5-FU contributes a long tail from extended infusion.",
+			"Leucovorin changes the combined exposure without dominating total burden.",
+			"Long infusion windows flatten the curve and sustain tumor exposure longer than a bolus alone.",
+		],
+		warning: "Illustrative FOLFOX timing only. The values are generalized for teaching trends.",
+	},
+	bep: {
+		id: "bep",
+		name: "BEP",
+		subtitle: "Testicular cancer teaching preset",
+		indication: "Testicular cancer teaching preset",
+		cycleDays: 21,
+		drugKeys: ["cisplatin", "bleomycin"],
+		drugs: [
+			{ drugKey: "cisplatin", doseMgM2: 20 },
+			{ drugKey: "bleomycin", doseMgM2: 10 },
+		],
+		primaryDrug: "cisplatin",
+		doseDays: [0, 7, 14],
+		description: "Bleomycin, Etoposide, Cisplatin. "
+			+ "First-line for testicular germ cell tumors.",
+		teachingNotes: [
+			"Cisplatin has a very long terminal half-life due to protein binding, maintaining low-level exposure for days.",
+			"Bleomycin pulmonary toxicity is cumulative and dose-limiting in this regimen.",
+			"Etoposide (not modeled) would add an intermediate-clearance drug to the profile.",
+		],
+		warning: "Illustrative BEP timing only. The values are generalized for teaching trends.",
+	},
+	cmf: {
+		id: "cmf",
+		name: "CMF",
+		subtitle: "Breast cancer teaching preset",
+		indication: "Breast cancer teaching preset",
+		cycleDays: 28,
+		drugKeys: ["cyclophosphamide", "methotrexate", "fluorouracil"],
+		drugs: [
+			{ drugKey: "cyclophosphamide", doseMgM2: 600 },
+			{ drugKey: "methotrexate", doseMgM2: 40 },
+			{ drugKey: "fluorouracil", doseMgM2: 600 },
+		],
+		primaryDrug: "cyclophosphamide",
+		doseDays: [0, 7],
+		description: "Cyclophosphamide, Methotrexate, 5-Fluorouracil. "
+			+ "Classic breast cancer adjuvant regimen.",
+		teachingNotes: [
+			"Three drugs with different half-lives create a staggered clearance pattern.",
+			"Cyclophosphamide is a prodrug activated by hepatic enzymes, so liver concentration is clinically important.",
+			"Methotrexate requires monitoring of renal function due to kidney-dependent clearance.",
+		],
+		warning: "Illustrative CMF timing only. The values are generalized for teaching trends.",
+	},
+};
+
+// Ordered list of regimen keys for UI rendering
+var REGIMEN_KEYS = ["abvd", "folfox", "bep", "cmf"];
+
+// ============================================
+// Backward-compatible CHEMO_CONSTANTS adapter
+// Maps old structure used by game_state, chart, body_visual, ui_rendering
+// Will be removed once all modules are migrated to DRUG_DATA / REGIMEN_PRESETS
+var CHEMO_CONSTANTS = {
+	// time step in hours for backward compat with pk_engine sample loop
+	timeStepHours: SIM_DEFAULTS.timeStepMinutes / 60,
+	// duration in hours
+	defaultDurationHours: SIM_DEFAULTS.defaultDurationMinutes / 60,
+	// visual channels for body rendering
+	visualChannels: CHEMO_VIS_CHANNELS,
+	// organ info for organ guide
+	organInfo: CHEMO_ORGAN_INFO,
+	// drugs map (same structure as DRUG_DATA, keyed by id)
+	drugs: DRUG_DATA,
+	// regimens array built from REGIMEN_PRESETS
+	regimens: (function() {
+		var result = [];
+		var index;
+		for (index = 0; index < REGIMEN_KEYS.length; index += 1) {
+			var preset = REGIMEN_PRESETS[REGIMEN_KEYS[index]];
+			result.push({
+				id: preset.id,
+				name: preset.name,
+				subtitle: preset.subtitle,
+				cycleHours: preset.cycleDays * 24,
+				drugIds: preset.drugKeys,
+				teachingNotes: preset.teachingNotes,
+				warning: preset.warning,
+				// dose events generated dynamically in regimen_engine.js
+				doseEvents: [],
+			});
+		}
+		return result;
+	})(),
+};
+// ============================================
+// regimen_engine.js -- Regimen lookup and dose event generation
+// ============================================
+// Regimen source doses are mg/m2 in REGIMEN_PRESETS
+// Converted to mg using current BSA at dose-event build time
+// ============================================
+
+// ============================================
+// Look up a regimen by ID from REGIMEN_PRESETS
+function chemoRegimenGetById(regimenId) {
+	if (REGIMEN_PRESETS[regimenId]) {
+		return REGIMEN_PRESETS[regimenId];
+	}
+	// fallback to first regimen
+	return REGIMEN_PRESETS[REGIMEN_KEYS[0]];
+}
+
+// ============================================
+// Build dose events for a regimen, converting mg/m2 to mg using given BSA
+// doseMultiplier: scales all doses (default 1.0, use 2.0 for double dose)
+// cycleCount: number of full cycles to schedule (default 1)
+// Returns array of {id, drugId, label, startHour, durationHours, amountMg}
+function chemoRegimenBuildDoseEvents(regimenId, bsa, doseMultiplier, cycleCount) {
+	var currentBSA = bsa || SIM_DEFAULTS.patientBSA;
+	var multiplier = doseMultiplier || 1.0;
+	var cycles = cycleCount || 1;
+	var regimen = chemoRegimenGetById(regimenId);
+	var events = [];
+	var cycleIndex;
+	var dayIndex;
+	var drugIndex;
+	// generate dose events for each cycle
+	for (cycleIndex = 0; cycleIndex < cycles; cycleIndex += 1) {
+		var cycleOffsetHours = cycleIndex * regimen.cycleDays * 24;
+		// generate dose events for each dose day in this cycle
+		for (dayIndex = 0; dayIndex < regimen.doseDays.length; dayIndex += 1) {
+			var doseDay = regimen.doseDays[dayIndex];
+			var startHour = cycleOffsetHours + doseDay * 24;
+			for (drugIndex = 0; drugIndex < regimen.drugs.length; drugIndex += 1) {
+				var drugSpec = regimen.drugs[drugIndex];
+				var drug = DRUG_DATA[drugSpec.drugKey];
+				// convert mg/m2 to mg using current BSA, then apply multiplier
+				var doseMg = Math.round(drugSpec.doseMgM2 * currentBSA * multiplier);
+				var cycleLabel = cycles > 1 ? " (C" + (cycleIndex + 1) + ")" : "";
+				var eventId = regimen.id + "-c" + cycleIndex + "-d" + doseDay + "-" + drug.id;
+				var label = "Day " + (doseDay + 1) + " " + drug.name + cycleLabel;
+				events.push({
+					id: eventId,
+					drugId: drug.id,
+					label: label,
+					startHour: startHour + drugIndex * 0.5,
+					durationHours: drug.infusionHours,
+					amountMg: doseMg,
+				});
+			}
+		}
+	}
+	// sort by start time
+	events.sort(function(left, right) {
+		return left.startHour - right.startHour;
+	});
+	return events;
+}
+
+// ============================================
+// Build combined dose events: regimen doses plus any custom manual doses
+function chemoRegimenBuildCombinedDoseEvents(regimenId, customDoseEvents, bsa, doseMultiplier, cycleCount) {
+	var events = chemoRegimenBuildDoseEvents(regimenId, bsa, doseMultiplier, cycleCount);
+	var manualEvents = customDoseEvents || [];
+	var index;
+	for (index = 0; index < manualEvents.length; index += 1) {
+		events.push(manualEvents[index]);
+	}
+	events.sort(function(left, right) {
+		return left.startHour - right.startHour;
+	});
+	return events;
+}
+
+// ============================================
+// Build list of drug objects for a regimen
+function chemoRegimenBuildDrugList(regimenId) {
+	var regimen = chemoRegimenGetById(regimenId);
+	var drugs = [];
+	var index;
+	for (index = 0; index < regimen.drugKeys.length; index += 1) {
+		drugs.push(DRUG_DATA[regimen.drugKeys[index]]);
+	}
+	return drugs;
+}
+// ============================================
+// pk_engine.js -- Pharmacokinetic engine with exponential decay models
+// ============================================
+// Uses canonical units: time in minutes, amount in mg, volume in L, concentration in mg/L
+// Vd source is L/kg, converted to total L using patient weight at calculation time
+// ============================================
+
+// ============================================
+// Utility: clamp value between minimum and maximum
+function chemoPkClamp(value, minimum, maximum) {
+	return Math.max(minimum, Math.min(maximum, value));
+}
+
+// ============================================
+// PRNG for reproducible stochastic tumor response (pedagogic noise)
+function chemoPkRandom() {
+	return Math.random();
+}
+
+// ============================================
+// One-compartment exponential decay: C(t) = C0 * e^(-ke * t)
+// drug: object from DRUG_DATA
+// doseMg: dose amount in mg
+// elapsedMinutes: time since dose administration in minutes
+// weightKg: patient weight for Vd conversion
+function chemoPkOneCompartment(drug, doseMg, elapsedMinutes, weightKg) {
+	// elimination rate constant: ke = ln(2) / half-life
+	var ke = 0.693 / drug.halfLifeMinutes;
+	// initial concentration: C0 = dose / (Vd_L/kg * weight_kg)
+	var vdLiters = drug.vdLPerKg * weightKg;
+	var c0 = doseMg / vdLiters;
+	// exponential decay
+	var concentration = c0 * Math.exp(-ke * elapsedMinutes);
+	return Math.max(0, concentration);
+}
+
+// ============================================
+// Two-compartment biphasic decay: C(t) = A*e^(-alpha*t) + B*e^(-beta*t)
+// Alpha phase: rapid initial distribution
+// Beta phase: slow terminal elimination
+function chemoPkTwoCompartment(drug, doseMg, elapsedMinutes, weightKg) {
+	// alpha rate from distribution half-life
+	var alphaRate = 0.693 / drug.halfLifeAlphaMinutes;
+	// beta rate from elimination half-life
+	var betaRate = 0.693 / drug.halfLifeBetaMinutes;
+	// total initial concentration
+	var vdLiters = drug.vdLPerKg * weightKg;
+	var cTotal = doseMg / vdLiters;
+	// split into rapid (70%) and slow (30%) components
+	var componentA = 0.7 * cTotal;
+	var componentB = 0.3 * cTotal;
+	// biphasic decay
+	var concentration = componentA * Math.exp(-alphaRate * elapsedMinutes)
+		+ componentB * Math.exp(-betaRate * elapsedMinutes);
+	return Math.max(0, concentration);
+}
+
+// ============================================
+// Calculate concentration for a single dose at a given time
+// Dispatches to one-compartment or two-compartment based on drug properties
+// doseTimeMins: when the dose was administered (in simulation minutes)
+// currentTimeMins: current simulation time in minutes
+function chemoPkConcentrationAtTime(drug, doseMg, doseTimeMins, currentTimeMins, weightKg) {
+	var elapsedMinutes = currentTimeMins - doseTimeMins;
+	// dose not yet administered
+	if (elapsedMinutes < 0) {
+		return 0;
+	}
+	if (drug.compartments === 2) {
+		return chemoPkTwoCompartment(drug, doseMg, elapsedMinutes, weightKg);
+	}
+	return chemoPkOneCompartment(drug, doseMg, elapsedMinutes, weightKg);
+}
+
+// ============================================
+// Calculate total concentration from multiple doses using superposition
+// doses: array of {timeMins, amountMg}
+function chemoPkMultiDoseConcentration(drug, doses, currentTimeMins, weightKg) {
+	var totalConcentration = 0;
+	var index;
+	for (index = 0; index < doses.length; index += 1) {
+		totalConcentration += chemoPkConcentrationAtTime(
+			drug, doses[index].amountMg, doses[index].timeMins,
+			currentTimeMins, weightKg
+		);
+	}
+	return totalConcentration;
+}
+
+// ============================================
+// Derive organ concentrations from plasma concentration using extraction ratios
+function chemoPkOrganConcentrations(drug, plasmaConc) {
+	// determine clearance route from drug properties
+	var route = "hepatic";
+	if (drug.primaryOrgan === "kidney") {
+		route = "renal";
+	}
+	if (drug.excretionOrgan === "bile") {
+		route = "biliary";
+	}
+	var liverRatio = ORGAN_EXTRACTION.liver[route];
+	var kidneyRatio = ORGAN_EXTRACTION.kidney[route];
+	var tissueRatio = ORGAN_EXTRACTION.tissue[route];
+	return {
+		plasma: plasmaConc,
+		liver: plasmaConc * liverRatio,
+		kidney: plasmaConc * kidneyRatio,
+		tissue: plasmaConc * tissueRatio,
+	};
+}
+
+// ============================================
+// Build simulation config from current state
+function chemoPkBuildSimulationConfig(state) {
+	return {
+		regimenId: state.regimenId,
+		timeStepHours: CHEMO_CONSTANTS.timeStepHours,
+		durationHours: CHEMO_CONSTANTS.defaultDurationHours,
+		bodyScale: state.bodyScale,
+		tumorSensitivity: state.tumorSensitivity,
+		playbackSpeed: state.playbackSpeed,
+		simulationRunId: state.simulationRunId,
+		customDoseEvents: state.customDoseEvents,
+		bsa: state.bsa || SIM_DEFAULTS.patientBSA,
+		weightKg: state.weightKg || SIM_DEFAULTS.patientWeightKg,
+		doseMultiplier: state.doseMultiplier || 1.0,
+		cycleCount: state.cycleCount || 1,
+	};
+}
+
+// ============================================
+// Build a dose map from dose events: {timeHour: {drugId: doseMg}}
+function chemoPkBuildDoseMap(doseEvents, durationHours, timeStepHours) {
+	var doseMap = {};
+	var timeHour;
+	for (timeHour = 0; timeHour <= durationHours; timeHour += timeStepHours) {
+		doseMap[timeHour] = {};
+	}
+	var eventIndex;
+	for (eventIndex = 0; eventIndex < doseEvents.length; eventIndex += 1) {
+		var event = doseEvents[eventIndex];
+		// snap dose to nearest time step
+		var startHour = Math.floor(event.startHour / timeStepHours) * timeStepHours;
+		var endHour = Math.ceil((event.startHour + event.durationHours) / timeStepHours) * timeStepHours;
+		var bucketCount = Math.max(1, Math.round((endHour - startHour) / timeStepHours));
+		var bucketDose = event.amountMg / bucketCount;
+		for (timeHour = startHour; timeHour < endHour; timeHour += timeStepHours) {
+			if (!doseMap[timeHour]) {
+				doseMap[timeHour] = {};
+			}
+			if (!doseMap[timeHour][event.drugId]) {
+				doseMap[timeHour][event.drugId] = 0;
+			}
+			doseMap[timeHour][event.drugId] += bucketDose;
+		}
+	}
+	return doseMap;
+}
+
+// ============================================
+// Compute tumor response probability from total burden
+// Uses logistic function; center and spread tuned for exponential decay PK scale
+function chemoPkComputeResponseProbability(totalBurden, config) {
+	var scaledBurden = totalBurden * config.tumorSensitivity * (1.15 / config.bodyScale);
+	// logistic center tuned for typical ABVD burden range
+	// at burden=2 response ~50%, at burden=10 response ~90%
+	var logisticCenter = 2;
+	var logisticSpread = 2.5;
+	var baseline = 1 / (1 + Math.exp(-(scaledBurden - logisticCenter) / logisticSpread));
+	// light pedagogic noise in tumor response only
+	var jitter = (chemoPkRandom() - 0.5) * 0.18;
+	return chemoPkClamp(baseline + jitter, 0.03, 0.97);
+}
+
+// ============================================
+// Update tumor volume based on response probability
+function chemoPkUpdateTumorVolume(currentTumorVolume, responseProbability, totalBurden) {
+	var tumorVolume = currentTumorVolume;
+	var roll = chemoPkRandom();
+	if (roll < responseProbability) {
+		// tumor shrinks: rate proportional to response probability
+		tumorVolume *= 1 - (0.010 + responseProbability * 0.035 + chemoPkRandom() * 0.015);
+	} else {
+		// tumor grows very slowly when treatment is ineffective
+		tumorVolume *= 1 + (0.001 + chemoPkRandom() * 0.003);
+	}
+	// minimal regrowth when no drug exposure
+	if (totalBurden < 0.5) {
+		tumorVolume *= 1 + (0.001 + chemoPkRandom() * 0.002);
+	}
+	return chemoPkClamp(tumorVolume, 0.15, 1.25);
+}
+
+// ============================================
+// Build visual state for body rendering from drug concentrations
+function chemoPkBuildVisualState(regimenDrugs, concentrationMap, totalBurden, config, tumorVolume) {
+	var visualState = {
+		bloodstream: 0,
+		liver: 0,
+		kidney: 0,
+		tumor: 0,
+		clearance: 0,
+		tumorRadius: 54,
+		tumorShrinkFraction: 0,
+	};
+	var drugIndex;
+	for (drugIndex = 0; drugIndex < regimenDrugs.length; drugIndex += 1) {
+		var drug = regimenDrugs[drugIndex];
+		var concentration = concentrationMap[drug.id] || 0;
+		visualState.bloodstream += concentration * drug.bodyAffinity.bloodstream;
+		visualState.liver += concentration * drug.bodyAffinity.liver;
+		visualState.kidney += concentration * drug.bodyAffinity.kidney;
+		visualState.tumor += concentration * drug.bodyAffinity.tumor * config.tumorSensitivity;
+	}
+	// normalize organ intensities to 0-1 range
+	// use a reference scale based on typical burden levels
+	var normalizer = Math.max(totalBurden, 0.5) * 1.2;
+	visualState.bloodstream = Math.min(1, visualState.bloodstream / normalizer);
+	visualState.liver = Math.min(1, visualState.liver / normalizer);
+	visualState.kidney = Math.min(1, visualState.kidney / normalizer);
+	visualState.tumor = Math.min(1, visualState.tumor / normalizer);
+	visualState.clearance = Math.min(1, (visualState.liver + visualState.kidney) / 2);
+	// tumor visual sizing
+	visualState.tumorRadius = 28 + (tumorVolume * 42);
+	visualState.tumorShrinkFraction = chemoPkClamp(1 - tumorVolume, 0, 0.78);
+	return visualState;
+}
+
+// ============================================
+// Update patient health based on organ burden
+// Deterministic toxicity model (no random shock for reproducibility)
+function chemoPkUpdatePatientState(currentHealth, totalBurden, visualState) {
+	// base toxicity proportional to drug burden
+	var toxicity = totalBurden * 0.04;
+	// organ stress from liver and kidney processing
+	var organStress = (visualState.liver + visualState.kidney + visualState.bloodstream) * 0.8;
+	// natural recovery (drops sharply when burden is high)
+	var recovery = Math.max(0.2, 1.2 - (totalBurden * 0.02));
+	// escalating toxicity at high burdens: narrow therapeutic window
+	if (totalBurden > 15) {
+		toxicity += (totalBurden - 15) * 0.05;
+	}
+	if (totalBurden > 40) {
+		toxicity += (totalBurden - 40) * 0.15;
+	}
+	if (totalBurden > 80) {
+		toxicity += (totalBurden - 80) * 0.4;
+	}
+	var health = currentHealth - toxicity - organStress + recovery;
+	return chemoPkClamp(health, 0, 100);
+}
+
+// ============================================
+// Determine life status string from health value
+function chemoPkBuildLifeStatus(patientHealth) {
+	if (patientHealth <= 0) {
+		return "Deceased";
+	}
+	if (patientHealth < 20) {
+		return "Critical";
+	}
+	if (patientHealth < 45) {
+		return "Unstable";
+	}
+	if (patientHealth < 70) {
+		return "Fragile";
+	}
+	return "Stable";
+}
+
+// ============================================
+// Build all simulation samples using exponential decay PK with dose superposition
+// This is the main simulation function: pre-computes the full sample array
+function chemoPkBuildSamples(config) {
+	var regimen = chemoRegimenGetById(config.regimenId);
+	var doseEvents = chemoRegimenBuildCombinedDoseEvents(
+		config.regimenId, config.customDoseEvents, config.bsa,
+		config.doseMultiplier, config.cycleCount
+	);
+	var regimenDrugs = chemoRegimenBuildDrugList(config.regimenId);
+	var weightKg = config.weightKg || SIM_DEFAULTS.patientWeightKg;
+	// build per-drug dose arrays for superposition
+	var drugDoseArrays = {};
+	var drugIndex;
+	for (drugIndex = 0; drugIndex < regimenDrugs.length; drugIndex += 1) {
+		drugDoseArrays[regimenDrugs[drugIndex].id] = [];
+	}
+	// distribute dose events into per-drug arrays
+	var eventIndex;
+	for (eventIndex = 0; eventIndex < doseEvents.length; eventIndex += 1) {
+		var event = doseEvents[eventIndex];
+		if (!drugDoseArrays[event.drugId]) {
+			drugDoseArrays[event.drugId] = [];
+		}
+		// convert dose event startHour to minutes for internal calculation
+		drugDoseArrays[event.drugId].push({
+			timeMins: event.startHour * 60,
+			amountMg: event.amountMg,
+		});
+	}
+	var tumorVolume = 1.05;
+	var patientHealth = 100;
+	var samples = [];
+	var timeHour;
+	for (timeHour = 0; timeHour <= config.durationHours; timeHour += config.timeStepHours) {
+		var timeMins = timeHour * 60;
+		var concentrationMap = {};
+		var totalBurden = 0;
+		// calculate concentration for each drug using superposition
+		for (drugIndex = 0; drugIndex < regimenDrugs.length; drugIndex += 1) {
+			var drug = regimenDrugs[drugIndex];
+			var doses = drugDoseArrays[drug.id] || [];
+			var drugConc = chemoPkMultiDoseConcentration(drug, doses, timeMins, weightKg);
+			concentrationMap[drug.id] = drugConc;
+			totalBurden += drugConc;
+		}
+		// build visual state and tumor/health response
+		var visualState = chemoPkBuildVisualState(regimenDrugs, concentrationMap, totalBurden, config, tumorVolume);
+		var responseProbability = chemoPkComputeResponseProbability(totalBurden, config);
+		tumorVolume = chemoPkUpdateTumorVolume(tumorVolume, responseProbability, totalBurden);
+		// rebuild visual state with updated tumor volume
+		visualState = chemoPkBuildVisualState(regimenDrugs, concentrationMap, totalBurden, config, tumorVolume);
+		patientHealth = chemoPkUpdatePatientState(patientHealth, totalBurden, visualState);
+		var lifeStatus = chemoPkBuildLifeStatus(patientHealth);
+		samples.push({
+			timeHour: timeHour,
+			drugConcentrations: concentrationMap,
+			totalBurden: totalBurden,
+			tumorVolume: tumorVolume,
+			responseProbability: responseProbability,
+			patientHealth: patientHealth,
+			lifeStatus: lifeStatus,
+			visualState: visualState,
+			regimenName: regimen.name,
+		});
+		// stop simulation if patient dies
+		if (lifeStatus === "Deceased") {
+			break;
+		}
+	}
+	return samples;
+}
+
+// ============================================
+// Find peak total burden across all samples
+function chemoPkFindPeakExposure(samples) {
+	var peak = 0;
+	var index;
+	for (index = 0; index < samples.length; index += 1) {
+		peak = Math.max(peak, samples[index].totalBurden);
+	}
+	return peak;
+}
+
+// ============================================
+// Find minimum tumor volume across all samples
+function chemoPkFindMinimumTumorVolume(samples) {
+	var minimum = 10;
+	var index;
+	for (index = 0; index < samples.length; index += 1) {
+		minimum = Math.min(minimum, samples[index].tumorVolume);
+	}
+	return minimum;
+}
+var CHEMO_STATE = {
+	regimenId: REGIMEN_KEYS[0],
+	bodyScale: 1,
+	tumorSensitivity: 1,
+	playbackSpeed: 1,
+	simulationRunId: 1,
+	// protocol modifiers
+	doseMultiplier: 1.0,
+	cycleCount: 1,
+	// configurable patient parameters
+	bsa: SIM_DEFAULTS.patientBSA,
+	weightKg: SIM_DEFAULTS.patientWeightKg,
+	// manual dose controls
+	manualDrugId: "doxorubicin",
+	manualDoseTimeHour: 24,
+	manualDoseAmountMg: 120,
+	customDoseEvents: [],
+	// simulation data
+	samples: [],
+	currentSampleIndex: 0,
+	peakExposure: 0,
+	minimumTumorVolume: 1,
+	playbackTimerId: null,
+};
+
+function chemoStateRebuildSimulation() {
+	var config = chemoPkBuildSimulationConfig(CHEMO_STATE);
+	CHEMO_STATE.samples = chemoPkBuildSamples(config);
+	CHEMO_STATE.currentSampleIndex = Math.min(CHEMO_STATE.currentSampleIndex, CHEMO_STATE.samples.length - 1);
+	CHEMO_STATE.peakExposure = chemoPkFindPeakExposure(CHEMO_STATE.samples);
+	CHEMO_STATE.minimumTumorVolume = chemoPkFindMinimumTumorVolume(CHEMO_STATE.samples);
+}
+
+function chemoStateSetRegimen(regimenId) {
+	CHEMO_STATE.regimenId = regimenId;
+	CHEMO_STATE.currentSampleIndex = 0;
+	CHEMO_STATE.simulationRunId += 1;
+	chemoStateRebuildSimulation();
+}
+
+function chemoStateSetBodyScale(value) {
+	CHEMO_STATE.bodyScale = value;
+	CHEMO_STATE.currentSampleIndex = 0;
+	CHEMO_STATE.simulationRunId += 1;
+	chemoStateRebuildSimulation();
+}
+
+function chemoStateSetTumorSensitivity(value) {
+	CHEMO_STATE.tumorSensitivity = value;
+	CHEMO_STATE.currentSampleIndex = 0;
+	CHEMO_STATE.simulationRunId += 1;
+	chemoStateRebuildSimulation();
+}
+
+function chemoStateSetPlaybackSpeed(value) {
+	CHEMO_STATE.playbackSpeed = value;
+}
+
+function chemoStateSetManualDrugId(drugId) {
+	CHEMO_STATE.manualDrugId = drugId;
+}
+
+function chemoStateSetManualDoseTimeHour(value) {
+	CHEMO_STATE.manualDoseTimeHour = value;
+}
+
+function chemoStateSetManualDoseAmountMg(value) {
+	CHEMO_STATE.manualDoseAmountMg = value;
+}
+
+function chemoStateAddCustomDose() {
+	var drug = CHEMO_CONSTANTS.drugs[CHEMO_STATE.manualDrugId];
+	var customId = "custom-" + CHEMO_STATE.simulationRunId + "-" + (CHEMO_STATE.customDoseEvents.length + 1);
+	CHEMO_STATE.customDoseEvents.push({
+		id: customId,
+		drugId: drug.id,
+		label: "Custom " + drug.name + " at " + CHEMO_STATE.manualDoseTimeHour + " h",
+		startHour: CHEMO_STATE.manualDoseTimeHour,
+		durationHours: drug.infusionHours,
+		amountMg: CHEMO_STATE.manualDoseAmountMg,
+	});
+	CHEMO_STATE.currentSampleIndex = 0;
+	CHEMO_STATE.simulationRunId += 1;
+	chemoStateRebuildSimulation();
+}
+
+function chemoStateClearCustomDoses() {
+	CHEMO_STATE.customDoseEvents = [];
+	CHEMO_STATE.currentSampleIndex = 0;
+	CHEMO_STATE.simulationRunId += 1;
+	chemoStateRebuildSimulation();
+}
+
+function chemoStateGetCurrentSample() {
+	if (!CHEMO_STATE.samples.length) {
+		return null;
+	}
+	return CHEMO_STATE.samples[CHEMO_STATE.currentSampleIndex];
+}
+
+function chemoStateAdvanceSample(stepCount) {
+	var nextIndex = CHEMO_STATE.currentSampleIndex + stepCount;
+	CHEMO_STATE.currentSampleIndex = Math.max(0, Math.min(CHEMO_STATE.samples.length - 1, nextIndex));
+}
+
+function chemoStateRerollSimulation() {
+	CHEMO_STATE.currentSampleIndex = 0;
+	CHEMO_STATE.simulationRunId += 1;
+	chemoStateRebuildSimulation();
+}
+
+function chemoStateStopPlayback() {
+	if (CHEMO_STATE.playbackTimerId !== null) {
+		window.clearInterval(CHEMO_STATE.playbackTimerId);
+		CHEMO_STATE.playbackTimerId = null;
+	}
+}
+
+function chemoStateStartPlayback(onTick) {
+	chemoStateStopPlayback();
+	var intervalMs = Math.max(120, 800 / CHEMO_STATE.playbackSpeed);
+	CHEMO_STATE.playbackTimerId = window.setInterval(function() {
+		if (CHEMO_STATE.currentSampleIndex >= CHEMO_STATE.samples.length - 1) {
+			chemoStateStopPlayback();
+			return;
+		}
+		chemoStateAdvanceSample(1);
+		onTick();
+	}, intervalMs);
+}
+function chemoChartFormatMg(value) {
+	return value.toFixed(2) + " mg/L";
+}
+
+function chemoChartBuildPath(samples, drugId, maxY, width, height, padding) {
+	var points = [];
+	var index;
+	var plotWidth = width - (padding * 2);
+	var plotHeight = height - (padding * 2);
+	for (index = 0; index < samples.length; index += 1) {
+		var x = padding + (plotWidth * index / Math.max(samples.length - 1, 1));
+		var y = height - padding - ((samples[index].drugConcentrations[drugId] || 0) / Math.max(maxY, 0.0001) * plotHeight);
+		points.push((index === 0 ? "M" : "L") + x.toFixed(1) + " " + y.toFixed(1));
+	}
+	return points.join(" ");
+}
+
+function chemoChartBuildTotalPath(samples, maxY, width, height, padding) {
+	var points = [];
+	var index;
+	var plotWidth = width - (padding * 2);
+	var plotHeight = height - (padding * 2);
+	for (index = 0; index < samples.length; index += 1) {
+		var x = padding + (plotWidth * index / Math.max(samples.length - 1, 1));
+		var y = height - padding - (samples[index].totalBurden / Math.max(maxY, 0.0001) * plotHeight);
+		points.push((index === 0 ? "M" : "L") + x.toFixed(1) + " " + y.toFixed(1));
+	}
+	return points.join(" ");
+}
+
+function chemoChartRender() {
+	var chartRoot = document.getElementById("chart-root");
+	var legendRoot = document.getElementById("chart-legend");
+	var currentSample = chemoStateGetCurrentSample();
+	var regimenDrugs = chemoRegimenBuildDrugList(CHEMO_STATE.regimenId);
+	var samples = CHEMO_STATE.samples;
+	var width = 760;
+	var height = 360;
+	var padding = 38;
+	var index;
+	var maxY = 0;
+	for (index = 0; index < samples.length; index += 1) {
+		maxY = Math.max(maxY, samples[index].totalBurden);
+	}
+	var gridLines = [];
+	for (index = 0; index <= 4; index += 1) {
+		var y = padding + ((height - (padding * 2)) * index / 4);
+		var labelValue = ((4 - index) / 4) * maxY;
+		gridLines.push(
+			"<line x1='" + padding + "' y1='" + y.toFixed(1) + "' x2='" + (width - padding) +
+			"' y2='" + y.toFixed(1) + "' stroke='#d7d2c7' stroke-width='1' />" +
+			"<text x='8' y='" + (y + 4).toFixed(1) + "' fill='#5b6a73' font-size='12'>" +
+			labelValue.toFixed(1) + "</text>"
+		);
+	}
+	var lineMarkup = [];
+	for (index = 0; index < regimenDrugs.length; index += 1) {
+		var drug = regimenDrugs[index];
+		lineMarkup.push(
+			"<path d='" + chemoChartBuildPath(samples, drug.id, maxY, width, height, padding) +
+			"' fill='none' stroke='" + drug.color + "' stroke-width='3' stroke-linecap='round' />"
+		);
+	}
+	lineMarkup.push(
+		"<path d='" + chemoChartBuildTotalPath(samples, maxY, width, height, padding) +
+		"' fill='none' stroke='#1f2a33' stroke-width='2' stroke-dasharray='7 6' />"
+	);
+	var sampleX = padding + ((width - (padding * 2)) * CHEMO_STATE.currentSampleIndex / Math.max(samples.length - 1, 1));
+	var deathMarker = "";
+	for (index = 0; index < samples.length; index += 1) {
+		if (samples[index].lifeStatus === "Deceased") {
+			var deathX = padding + ((width - (padding * 2)) * index / Math.max(samples.length - 1, 1));
+			deathMarker = "<line x1='" + deathX.toFixed(1) + "' y1='" + padding + "' x2='" + deathX.toFixed(1) + "' y2='" + (height - padding) + "' stroke='#000000' stroke-width='2' stroke-dasharray='4 5' />" +
+				"<text x='" + (deathX + 6).toFixed(1) + "' y='" + (padding + 16) + "' fill='#000000' font-size='12'>Patient death</text>";
+			break;
+		}
+	}
+	var svg = "" +
+		"<svg class='chart-svg' viewBox='0 0 " + width + " " + height + "' role='img' aria-label='Chemotherapy concentration chart'>" +
+		"<rect x='0' y='0' width='" + width + "' height='" + height + "' rx='18' fill='#fffdf8' />" +
+		gridLines.join("") +
+		"<line x1='" + padding + "' y1='" + (height - padding) + "' x2='" + (width - padding) + "' y2='" + (height - padding) + "' stroke='#1f2a33' stroke-width='1.5' />" +
+		"<line x1='" + sampleX.toFixed(1) + "' y1='" + padding + "' x2='" + sampleX.toFixed(1) + "' y2='" + (height - padding) + "' stroke='#ba4a2f' stroke-width='2' />" +
+		deathMarker +
+		lineMarkup.join("") +
+		"</svg>" +
+		"<p class='footer-note'>Current time: <strong>" + currentSample.timeHour.toFixed(0) +
+		" hours</strong>. Dashed line shows total burden across all active drugs.</p>";
+	chartRoot.innerHTML = svg;
+	var legendMarkup = [];
+	for (index = 0; index < regimenDrugs.length; index += 1) {
+		var legendDrug = regimenDrugs[index];
+		legendMarkup.push(
+			"<div class='legend-chip'><span class='legend-swatch' style='background:" + legendDrug.color +
+			";'></span><span>" + legendDrug.name + ": " +
+			chemoChartFormatMg(currentSample.drugConcentrations[legendDrug.id] || 0) + "</span></div>"
+		);
+	}
+	legendMarkup.push(
+		"<div class='legend-chip'><span class='legend-swatch' style='background:#1f2a33;'></span><span>Total burden: " +
+		chemoChartFormatMg(currentSample.totalBurden) + "</span></div>"
+	);
+	legendRoot.innerHTML = legendMarkup.join("");
+}
+function chemoVisualColor(channelKey, intensity) {
+	var palette = {
+		bloodstream: [214, 80, 80],
+		liver: [221, 139, 61],
+		kidney: [74, 125, 178],
+		tumor: [126, 91, 214],
+		clearance: [115, 179, 125],
+	};
+	var rgb = palette[channelKey];
+	var alpha = 0.15 + (intensity * 0.8);
+	return "rgba(" + rgb[0] + "," + rgb[1] + "," + rgb[2] + "," + alpha.toFixed(2) + ")";
+}
+
+function chemoVisualPercentText(intensity) {
+	return Math.round(intensity * 100) + "%";
+}
+
+function chemoVisualCreateSeed(sample) {
+	var text = [sample.regimenName || "", sample.timeHour || 0, sample.totalBurden || 0].join("|");
+	var seed = 2166136261;
+	var index;
+	for (index = 0; index < text.length; index += 1) {
+		seed ^= text.charCodeAt(index);
+		seed = Math.imul(seed, 16777619);
+	}
+	return seed >>> 0;
+}
+
+function chemoVisualCreatePrng(seed) {
+	var state = seed >>> 0;
+	return function() {
+		state = (1664525 * state + 1013904223) >>> 0;
+		return state / 4294967296;
+	};
+}
+
+function chemoVisualGetTumorMetrics(sample) {
+	var visualState = sample.visualState || {};
+	var responseChance = typeof sample.responseProbability === "number" ? sample.responseProbability : 0;
+	var tumorShrinkFraction = typeof visualState.tumorShrinkFraction === "number" ? visualState.tumorShrinkFraction : 0;
+	var tumorRadius = typeof visualState.tumorRadius === "number" ? visualState.tumorRadius : 60;
+	if (typeof sample.responseProbability !== "number") {
+		var burdenEffect = Math.max(0, Math.min(1, (sample.totalBurden || 0) / 18));
+		responseChance = 0.1 + (burdenEffect * 0.65);
+		if (responseChance < 0.03) {
+			responseChance = 0.03;
+		}
+		if (responseChance > 0.97) {
+			responseChance = 0.97;
+		}
+	}
+	if (typeof visualState.tumorShrinkFraction !== "number") {
+		var timeResponse = Math.max(0, Math.min(1, (sample.timeHour || 0) / 336));
+		tumorShrinkFraction = Math.max(0, Math.min(1, (responseChance * 0.75) + (timeResponse * 0.18)));
+	}
+	if (typeof visualState.tumorRadius !== "number") {
+		tumorRadius = 84 - (tumorShrinkFraction * 34);
+	}
+	return {
+		responseChance: responseChance,
+		tumorShrinkFraction: tumorShrinkFraction,
+		tumorRadius: Math.max(26, Math.min(92, tumorRadius)),
+	};
+}
+
+function chemoVisualRenderBody() {
+	var currentSample = chemoStateGetCurrentSample();
+	var visualState = currentSample.visualState;
+	var tumorMetrics = chemoVisualGetTumorMetrics(currentSample);
+	var root = document.getElementById("body-visual-root");
+	var statusRoot = document.getElementById("body-status-root");
+	var tumorRadius = tumorMetrics.tumorRadius.toFixed(1);
+	var tumorGlowRadius = (tumorMetrics.tumorRadius + 16).toFixed(1);
+	var tumorCoreRadius = Math.max(18, tumorMetrics.tumorRadius * 0.72).toFixed(1);
+	var patientHealth = typeof currentSample.patientHealth === "number" ? currentSample.patientHealth : 100;
+	var lifeStatus = currentSample.lifeStatus || "Stable";
+	var bodyOpacity = Math.max(0.18, patientHealth / 100);
+	var outlineColor = lifeStatus === "Deceased" ? "#1a1a1a" : "#bfb7aa";
+	var healthBarRoot = document.getElementById("patient-health-bar-root");
+	var svg = "" +
+		"<svg class='body-svg' viewBox='0 0 360 460' role='img' aria-label='Stylized body diagram'>" +
+		"<rect x='0' y='0' width='360' height='460' rx='28' fill='#fffdf8' />" +
+		"<circle cx='180' cy='64' r='38' fill='rgba(31,42,51,0.05)' stroke='#bfb7aa' />" +
+		"<path d='M120 132 C138 108, 223 108, 240 132 L262 214 C268 236, 262 255, 248 270 L226 430 L194 430 L188 328 L172 328 L166 430 L134 430 L112 270 C98 255, 92 236, 98 214 Z' fill='rgba(31,42,51," + bodyOpacity.toFixed(2) + ")' stroke='" + outlineColor + "' stroke-width='2' />" +
+		"<path d='M150 142 C162 132, 198 132, 210 142 C222 151, 228 174, 216 188 C204 202, 156 202, 144 188 C132 174, 138 151, 150 142 Z' fill='" + chemoVisualColor("bloodstream", visualState.bloodstream) + "' stroke='rgba(214,80,80,0.5)' />" +
+		"<ellipse cx='145' cy='214' rx='34' ry='24' fill='" + chemoVisualColor("liver", visualState.liver) + "' stroke='rgba(221,139,61,0.55)' />" +
+		"<ellipse cx='138' cy='274' rx='20' ry='34' fill='" + chemoVisualColor("kidney", visualState.kidney) + "' stroke='rgba(74,125,178,0.55)' />" +
+		"<ellipse cx='222' cy='274' rx='20' ry='34' fill='" + chemoVisualColor("kidney", visualState.kidney) + "' stroke='rgba(74,125,178,0.55)' />" +
+		"<circle cx='226' cy='208' r='" + tumorGlowRadius + "' fill='rgba(126,91,214,0.12)' />" +
+		"<circle cx='226' cy='208' r='" + tumorRadius + "' fill='" + chemoVisualColor("tumor", visualState.tumor) + "' stroke='rgba(126,91,214,0.78)' stroke-width='3' />" +
+		"<circle cx='236' cy='196' r='" + tumorCoreRadius + "' fill='rgba(255,255,255,0.12)' />" +
+		"<path d='M162 182 C170 214, 160 246, 150 266' fill='none' stroke='" + chemoVisualColor("clearance", visualState.clearance) + "' stroke-width='7' stroke-linecap='round' />" +
+		"<path d='M200 182 C210 216, 220 240, 228 266' fill='none' stroke='" + chemoVisualColor("clearance", visualState.clearance) + "' stroke-width='7' stroke-linecap='round' />" +
+		"<g fill='none' stroke='#5b6a73' stroke-width='1.6'>" +
+		"<path d='M210 142 L284 120' />" +
+		"<path d='M172 214 L78 206' />" +
+		"<path d='M138 302 L58 332' />" +
+		"<path d='M226 204 L300 188' />" +
+		"</g>" +
+		"<g fill='#1f2a33' font-size='13' font-family='Avenir Next, Segoe UI, sans-serif'>" +
+		"<text x='288' y='122'>Bloodstream</text>" +
+		"<text x='26' y='210'>Liver</text>" +
+		"<text x='18' y='338'>Kidneys</text>" +
+		"<text x='304' y='192'>Tumor</text>" +
+		"</g>" +
+		"<text x='180' y='28' text-anchor='middle' fill='#5b6a73' font-size='14'>Drug processing and stochastic response view</text>" +
+		"<text x='180' y='446' text-anchor='middle' fill='#1f2a33' font-size='14'>Patient status: " + lifeStatus + "</text>" +
+		"</svg>";
+	root.innerHTML = svg;
+	var healthColor = "#73b37d";
+	if (patientHealth < 70) {
+		healthColor = "#dd8b3d";
+	}
+	if (patientHealth < 40) {
+		healthColor = "#ba4a2f";
+	}
+	if (patientHealth <= 0) {
+		healthColor = "#1a1a1a";
+	}
+	healthBarRoot.innerHTML = "" +
+		"<div class='health-bar-shell'>" +
+		"<div class='health-bar-label'><span>Patient vitality</span><strong>" + Math.round(patientHealth) + "%</strong></div>" +
+		"<div class='health-bar-track'><div class='health-bar-fill' style='width:" + Math.max(0, Math.min(100, patientHealth)).toFixed(0) + "%; background:" + healthColor + ";'></div></div>" +
+		"</div>";
+	statusRoot.innerHTML = "" +
+		"<div class='status-pill'><span>Bloodstream</span><strong>" + chemoVisualPercentText(visualState.bloodstream) + "</strong></div>" +
+		"<div class='status-pill'><span>Liver load</span><strong>" + chemoVisualPercentText(visualState.liver) + "</strong></div>" +
+		"<div class='status-pill'><span>Kidney clearance</span><strong>" + chemoVisualPercentText(visualState.kidney) + "</strong></div>" +
+		"<div class='status-pill'><span>Tumor exposure</span><strong>" + chemoVisualPercentText(visualState.tumor) + "</strong></div>" +
+		"<div class='status-pill'><span>Tumor size</span><strong>" + Math.round((currentSample.tumorVolume || (tumorMetrics.tumorRadius / 92)) * 100) + "%</strong></div>" +
+		"<div class='status-pill'><span>Response chance</span><strong>" + chemoVisualPercentText(tumorMetrics.responseChance) + "</strong></div>" +
+		"<div class='status-pill'><span>Tumor shrinkage</span><strong>" + chemoVisualPercentText(tumorMetrics.tumorShrinkFraction) + "</strong></div>" +
+		"<div class='status-pill'><span>Patient vitality</span><strong>" + Math.round(patientHealth) + "%</strong></div>" +
+		"<div class='status-pill'><span>Life status</span><strong>" + lifeStatus + "</strong></div>";
+}
+// ============================================
+// ui_rendering.js -- UI update functions for new interaction-first layout
+// ============================================
+
+// ============================================
+// Render regimen preset buttons
+function chemoUiRenderPresetButtons() {
+	var container = document.getElementById("preset-button-grid");
+	var markup = [];
+	var index;
+	for (index = 0; index < CHEMO_CONSTANTS.regimens.length; index += 1) {
+		var regimen = CHEMO_CONSTANTS.regimens[index];
+		var activeClass = regimen.id === CHEMO_STATE.regimenId ? " is-active" : "";
+		markup.push(
+			"<button class='preset-button" + activeClass + "' data-regimen-id='" + regimen.id + "' type='button'>" +
+			"<span class='preset-title'>" + regimen.name + "</span>" +
+			"<span class='preset-subtitle'>" + regimen.subtitle + "</span>" +
+			"<span class='preset-note'>" + regimen.drugIds.length + " drugs over " + (regimen.cycleHours / 24).toFixed(0) + " days</span>" +
+			"</button>"
+		);
+	}
+	container.innerHTML = markup.join("");
+}
+
+// ============================================
+// Render manual drug options in the dropdown
+function chemoUiRenderManualDrugOptions() {
+	var select = document.getElementById("manual-drug-select");
+	var markup = [];
+	var index;
+	for (index = 0; index < DRUG_KEYS.length; index += 1) {
+		var drugId = DRUG_KEYS[index];
+		var drug = DRUG_DATA[drugId];
+		var selected = drug.id === CHEMO_STATE.manualDrugId ? " selected" : "";
+		markup.push("<option value='" + drug.id + "'" + selected + ">" + drug.name + "</option>");
+	}
+	select.innerHTML = markup.join("");
+}
+
+// ============================================
+// Update compact stats strip
+function chemoUiRenderMetrics() {
+	var sample = chemoStateGetCurrentSample();
+	if (!sample) {
+		return;
+	}
+	var responseChance = typeof sample.responseProbability === "number" ? sample.responseProbability : 0;
+	var tumorVolume = typeof sample.tumorVolume === "number" ? sample.tumorVolume : 1;
+	// current burden
+	document.getElementById("metric-total-burden").textContent = sample.totalBurden.toFixed(2) + " mg/L";
+	// max burden (peak)
+	document.getElementById("metric-peak-exposure").textContent = CHEMO_STATE.peakExposure.toFixed(2) + " mg/L";
+	// tumor size
+	document.getElementById("metric-tumor-volume").textContent = Math.round(tumorVolume * 100) + "%";
+	// response chance
+	document.getElementById("metric-response-chance").textContent = Math.round(responseChance * 100) + "%";
+	// patient health
+	document.getElementById("metric-patient-vitality").textContent = Math.round(sample.patientHealth || 100) + "%";
+	// life status
+	document.getElementById("metric-life-status").textContent = sample.lifeStatus || "Stable";
+	// hidden backward-compat elements
+	var regimenNameEl = document.getElementById("metric-regimen-name");
+	if (regimenNameEl) {
+		var regimen = chemoRegimenGetById(CHEMO_STATE.regimenId);
+		regimenNameEl.textContent = regimen.name;
+	}
+	var clearanceEl = document.getElementById("metric-clearance");
+	if (clearanceEl) {
+		clearanceEl.textContent = Math.round(sample.visualState.clearance * 100) + "%";
+	}
+	// update warning text
+	var warningEl = document.getElementById("regimen-warning-text");
+	if (warningEl) {
+		var reg = chemoRegimenGetById(CHEMO_STATE.regimenId);
+		warningEl.textContent = reg.warning;
+	}
+	// update time label
+	document.getElementById("time-label").textContent = sample.timeHour.toFixed(0) + " h";
+}
+
+// ============================================
+// Render teaching notes for current regimen
+function chemoUiRenderTeachingNotes() {
+	var regimen = chemoRegimenGetById(CHEMO_STATE.regimenId);
+	var noteRoot = document.getElementById("teaching-notes-list");
+	var markup = [];
+	var index;
+	for (index = 0; index < regimen.teachingNotes.length; index += 1) {
+		markup.push("<li>" + regimen.teachingNotes[index] + "</li>");
+	}
+	noteRoot.innerHTML = markup.join("");
+}
+
+// ============================================
+// Update slider labels and scrubber bounds
+function chemoUiRenderSliderLabels() {
+	document.getElementById("tumor-sensitivity-value").textContent = CHEMO_STATE.tumorSensitivity.toFixed(2) + "x";
+	document.getElementById("playback-speed-value").textContent = CHEMO_STATE.playbackSpeed.toFixed(1) + "x";
+	document.getElementById("manual-dose-time-value").textContent = CHEMO_STATE.manualDoseTimeHour.toFixed(0) + " h";
+	document.getElementById("manual-dose-amount-value").textContent = CHEMO_STATE.manualDoseAmountMg.toFixed(0) + " mg";
+	// update manual drug label if element exists
+	var drugLabel = document.getElementById("manual-drug-label");
+	if (drugLabel) {
+		drugLabel.textContent = DRUG_DATA[CHEMO_STATE.manualDrugId].name;
+	}
+}
+
+// ============================================
+// Update scrubber range and position
+function chemoUiRenderScrubberBounds() {
+	var scrubber = document.getElementById("time-scrubber");
+	scrubber.max = Math.max(CHEMO_STATE.samples.length - 1, 1);
+	scrubber.value = CHEMO_STATE.currentSampleIndex;
+}
+
+// ============================================
+// Render custom dose event list
+function chemoUiRenderCustomDoseList() {
+	var list = document.getElementById("manual-dose-list");
+	var markup = [];
+	var index;
+	if (!CHEMO_STATE.customDoseEvents.length) {
+		list.innerHTML = "<div class='dose-chip'>No custom doses yet.</div>";
+		return;
+	}
+	for (index = 0; index < CHEMO_STATE.customDoseEvents.length; index += 1) {
+		var event = CHEMO_STATE.customDoseEvents[index];
+		markup.push(
+			"<div class='dose-chip'>" + event.label + " - " + event.amountMg.toFixed(0) + " mg</div>"
+		);
+	}
+	list.innerHTML = markup.join("");
+}
+
+// ============================================
+// Render organ guide (hidden in new layout, kept for backward compat)
+function chemoUiRenderOrganGuide() {
+	var guideRoot = document.getElementById("organ-guide-root");
+	if (!guideRoot || guideRoot.style.display === "none") {
+		return;
+	}
+}
+
+// ============================================
+// Full render: update all UI elements
+function chemoUiRenderAll() {
+	chemoUiRenderPresetButtons();
+	chemoUiRenderManualDrugOptions();
+	chemoUiRenderMetrics();
+	chemoUiRenderTeachingNotes();
+	chemoUiRenderSliderLabels();
+	chemoUiRenderScrubberBounds();
+	chemoUiRenderCustomDoseList();
+	chemoUiRenderOrganGuide();
+	chemoChartRender();
+	chemoVisualRenderBody();
+}
+// ============================================
+// init.js -- Bootstrap and event wiring for interaction-first layout
+// ============================================
+
+// ============================================
+// Bind regimen preset buttons via event delegation
+function chemoInitBindPresetButtons() {
+	var container = document.getElementById("preset-button-grid");
+	container.addEventListener("click", function(event) {
+		var button = event.target.closest(".preset-button");
+		if (!button) {
+			return;
+		}
+		// stop any playback, load regimen at t=0 (do NOT autoplay)
+		chemoStateStopPlayback();
+		chemoStateSetRegimen(button.getAttribute("data-regimen-id"));
+		chemoUiRenderAll();
+	});
+}
+
+// ============================================
+// Bind playback and simulation controls
+function chemoInitBindControls() {
+	// playback speed slider
+	document.getElementById("playback-speed-slider").addEventListener("input", function(event) {
+		chemoStateSetPlaybackSpeed(parseFloat(event.target.value));
+		chemoUiRenderSliderLabels();
+		// if currently playing, restart with new speed
+		if (CHEMO_STATE.playbackTimerId !== null) {
+			chemoStateStartPlayback(chemoUiRenderAll);
+		}
+	});
+
+	// play button
+	document.getElementById("play-button").addEventListener("click", function() {
+		chemoStateStartPlayback(chemoUiRenderAll);
+	});
+
+	// pause button
+	document.getElementById("pause-button").addEventListener("click", function() {
+		chemoStateStopPlayback();
+	});
+
+	// reset button
+	document.getElementById("reset-button").addEventListener("click", function() {
+		chemoStateStopPlayback();
+		chemoStateRerollSimulation();
+		chemoUiRenderAll();
+	});
+
+	// step button
+	document.getElementById("step-button").addEventListener("click", function() {
+		chemoStateStopPlayback();
+		chemoStateAdvanceSample(1);
+		chemoUiRenderAll();
+	});
+
+	// time scrubber
+	document.getElementById("time-scrubber").addEventListener("input", function(event) {
+		chemoStateStopPlayback();
+		CHEMO_STATE.currentSampleIndex = parseInt(event.target.value, 10);
+		chemoUiRenderAll();
+	});
+}
+
+// ============================================
+// Bind protocol adjustment and custom dosing controls
+function chemoInitBindCustomDosing() {
+	// dose multiplier slider: scales all regimen doses
+	document.getElementById("dose-multiplier-slider").addEventListener("input", function(event) {
+		chemoStateStopPlayback();
+		CHEMO_STATE.doseMultiplier = parseFloat(event.target.value);
+		document.getElementById("dose-multiplier-value").textContent = CHEMO_STATE.doseMultiplier.toFixed(2) + "x";
+		CHEMO_STATE.currentSampleIndex = 0;
+		CHEMO_STATE.simulationRunId += 1;
+		chemoStateRebuildSimulation();
+		chemoUiRenderAll();
+	});
+
+	// cycle count slider: repeats the full dose schedule
+	document.getElementById("cycle-count-slider").addEventListener("input", function(event) {
+		chemoStateStopPlayback();
+		CHEMO_STATE.cycleCount = parseInt(event.target.value, 10);
+		document.getElementById("cycle-count-value").textContent = CHEMO_STATE.cycleCount;
+		CHEMO_STATE.currentSampleIndex = 0;
+		CHEMO_STATE.simulationRunId += 1;
+		chemoStateRebuildSimulation();
+		chemoUiRenderAll();
+	});
+
+	// tumor sensitivity slider
+	document.getElementById("tumor-sensitivity-slider").addEventListener("input", function(event) {
+		chemoStateStopPlayback();
+		chemoStateSetTumorSensitivity(parseFloat(event.target.value));
+		chemoUiRenderAll();
+	});
+
+	// manual drug selector
+	document.getElementById("manual-drug-select").addEventListener("change", function(event) {
+		chemoStateSetManualDrugId(event.target.value);
+		chemoUiRenderSliderLabels();
+	});
+
+	// manual dose time slider
+	document.getElementById("manual-dose-time-slider").addEventListener("input", function(event) {
+		chemoStateSetManualDoseTimeHour(parseFloat(event.target.value));
+		chemoUiRenderSliderLabels();
+	});
+
+	// manual dose amount slider
+	document.getElementById("manual-dose-amount-slider").addEventListener("input", function(event) {
+		chemoStateSetManualDoseAmountMg(parseFloat(event.target.value));
+		chemoUiRenderSliderLabels();
+	});
+
+	// add dose button
+	document.getElementById("add-dose-button").addEventListener("click", function() {
+		chemoStateStopPlayback();
+		chemoStateAddCustomDose();
+		chemoUiRenderAll();
+	});
+
+	// clear doses button
+	document.getElementById("clear-doses-button").addEventListener("click", function() {
+		chemoStateStopPlayback();
+		chemoStateClearCustomDoses();
+		chemoUiRenderAll();
+	});
+}
+
+// ============================================
+// Main bootstrap function
+function chemoInitBootstrap() {
+	// build initial simulation
+	chemoStateRebuildSimulation();
+	// render all UI elements
+	chemoUiRenderAll();
+	// bind event listeners
+	chemoInitBindPresetButtons();
+	chemoInitBindControls();
+	chemoInitBindCustomDosing();
+}
+
+// ============================================
+// Start when DOM is ready
+document.addEventListener("DOMContentLoaded", chemoInitBootstrap);
+
+</script>
+</body>
+</html>

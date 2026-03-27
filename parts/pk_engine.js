@@ -123,6 +123,8 @@ function chemoPkBuildSimulationConfig(state) {
 		customDoseEvents: state.customDoseEvents,
 		bsa: state.bsa || SIM_DEFAULTS.patientBSA,
 		weightKg: state.weightKg || SIM_DEFAULTS.patientWeightKg,
+		doseMultiplier: state.doseMultiplier || 1.0,
+		cycleCount: state.cycleCount || 1,
 	};
 }
 
@@ -229,17 +231,20 @@ function chemoPkBuildVisualState(regimenDrugs, concentrationMap, totalBurden, co
 // Deterministic toxicity model (no random shock for reproducibility)
 function chemoPkUpdatePatientState(currentHealth, totalBurden, visualState) {
 	// base toxicity proportional to drug burden
-	var toxicity = totalBurden * 0.012;
+	var toxicity = totalBurden * 0.04;
 	// organ stress from liver and kidney processing
-	var organStress = (visualState.liver + visualState.kidney + visualState.bloodstream) * 0.6;
-	// natural recovery (less when burden is high)
-	var recovery = Math.max(0.4, 1.8 - (totalBurden * 0.008));
-	// escalating toxicity at high burdens
-	if (totalBurden > 20) {
-		toxicity += (totalBurden - 20) * 0.025;
+	var organStress = (visualState.liver + visualState.kidney + visualState.bloodstream) * 0.8;
+	// natural recovery (drops sharply when burden is high)
+	var recovery = Math.max(0.2, 1.2 - (totalBurden * 0.02));
+	// escalating toxicity at high burdens: narrow therapeutic window
+	if (totalBurden > 15) {
+		toxicity += (totalBurden - 15) * 0.05;
 	}
-	if (totalBurden > 50) {
-		toxicity += (totalBurden - 50) * 0.08;
+	if (totalBurden > 40) {
+		toxicity += (totalBurden - 40) * 0.15;
+	}
+	if (totalBurden > 80) {
+		toxicity += (totalBurden - 80) * 0.4;
 	}
 	var health = currentHealth - toxicity - organStress + recovery;
 	return chemoPkClamp(health, 0, 100);
@@ -268,7 +273,10 @@ function chemoPkBuildLifeStatus(patientHealth) {
 // This is the main simulation function: pre-computes the full sample array
 function chemoPkBuildSamples(config) {
 	var regimen = chemoRegimenGetById(config.regimenId);
-	var doseEvents = chemoRegimenBuildCombinedDoseEvents(config.regimenId, config.customDoseEvents, config.bsa);
+	var doseEvents = chemoRegimenBuildCombinedDoseEvents(
+		config.regimenId, config.customDoseEvents, config.bsa,
+		config.doseMultiplier, config.cycleCount
+	);
 	var regimenDrugs = chemoRegimenBuildDrugList(config.regimenId);
 	var weightKg = config.weightKg || SIM_DEFAULTS.patientWeightKg;
 	// build per-drug dose arrays for superposition

@@ -2,7 +2,7 @@
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")" && pwd)"
-OUTPUT_FILE="$REPO_ROOT/output/chemotherapy_body_simulation.html"
+OUTPUT_FILE="$REPO_ROOT/chemotherapy_body_simulation.html"
 
 cat "$REPO_ROOT/parts/head.html" > "$OUTPUT_FILE"
 printf '<style>\n' >> "$OUTPUT_FILE"

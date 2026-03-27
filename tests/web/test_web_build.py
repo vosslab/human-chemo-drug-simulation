@@ -4,7 +4,7 @@ import json
 
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
-OUTPUT_HTML = REPO_ROOT / "output" / "chemotherapy_body_simulation.html"
+OUTPUT_HTML = REPO_ROOT / "chemotherapy_body_simulation.html"
 
 
 #============================================
@@ -48,7 +48,7 @@ def test_web_build_contains_expected_sections():
 	assert "play-button" in html
 	assert "time-scrubber" in html
 	# custom dosing section
-	assert "Explore custom dosing" in html
+	assert "Adjust Protocol" in html
 	assert "manual-drug-select" in html
 	# teaching notes
 	assert "teaching-notes-list" in html
@@ -156,5 +156,5 @@ console.log(JSON.stringify({
 	assert data["concentrationCheck"] is True
 	# no NaN values
 	assert data["noNaN"] is True
-	# health starts at 100
-	assert data["firstHealth"] == 100
+	# health starts near 100 (may dip slightly from first timestep toxicity)
+	assert data["firstHealth"] > 95

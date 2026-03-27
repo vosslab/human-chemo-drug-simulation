@@ -174,7 +174,7 @@ console.log("    peak: " + hiPeak.toFixed(2) + " mg/L");
 console.log("    min health: " + minHealth.toFixed(1));
 console.log("    last health: " + hiLast.patientHealth.toFixed(1) + " (" + hiLast.lifeStatus + ")");
 check("high dose peak > 40 mg/L", hiPeak > 40);
-check("high dose causes health decline (< 90)", minHealth < 90);
+check("high dose causes serious health decline (< 50)", minHealth < 50);
 check("high dose does not instant-kill", hiSamples.length > 10);
 // reset custom events
 config.customDoseEvents = [];
