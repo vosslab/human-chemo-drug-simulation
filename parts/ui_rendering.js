@@ -1,7 +1,9 @@
-function chemoUiFormatMultiplier(value) {
-	return value.toFixed(2) + "x";
-}
+// ============================================
+// ui_rendering.js -- UI update functions for new interaction-first layout
+// ============================================
 
+// ============================================
+// Render regimen preset buttons
 function chemoUiRenderPresetButtons() {
 	var container = document.getElementById("preset-button-grid");
 	var markup = [];
@@ -20,36 +22,64 @@ function chemoUiRenderPresetButtons() {
 	container.innerHTML = markup.join("");
 }
 
+// ============================================
+// Render manual drug options in the dropdown
 function chemoUiRenderManualDrugOptions() {
 	var select = document.getElementById("manual-drug-select");
 	var markup = [];
-	var drugIds = Object.keys(CHEMO_CONSTANTS.drugs);
 	var index;
-	for (index = 0; index < drugIds.length; index += 1) {
-		var drug = CHEMO_CONSTANTS.drugs[drugIds[index]];
+	for (index = 0; index < DRUG_KEYS.length; index += 1) {
+		var drugId = DRUG_KEYS[index];
+		var drug = DRUG_DATA[drugId];
 		var selected = drug.id === CHEMO_STATE.manualDrugId ? " selected" : "";
 		markup.push("<option value='" + drug.id + "'" + selected + ">" + drug.name + "</option>");
 	}
 	select.innerHTML = markup.join("");
 }
 
+// ============================================
+// Update compact stats strip
 function chemoUiRenderMetrics() {
 	var sample = chemoStateGetCurrentSample();
-	var regimen = chemoRegimenGetById(CHEMO_STATE.regimenId);
+	if (!sample) {
+		return;
+	}
 	var responseChance = typeof sample.responseProbability === "number" ? sample.responseProbability : 0;
 	var tumorVolume = typeof sample.tumorVolume === "number" ? sample.tumorVolume : 1;
-	document.getElementById("metric-regimen-name").textContent = regimen.name;
-	document.getElementById("metric-total-burden").textContent = chemoChartFormatMg(sample.totalBurden);
-	document.getElementById("metric-peak-exposure").textContent = chemoChartFormatMg(CHEMO_STATE.peakExposure);
-	document.getElementById("metric-clearance").textContent = Math.round(sample.visualState.clearance * 100) + "%";
+	// current burden
+	document.getElementById("metric-total-burden").textContent = sample.totalBurden.toFixed(2) + " mg/L";
+	// max burden (peak)
+	document.getElementById("metric-peak-exposure").textContent = CHEMO_STATE.peakExposure.toFixed(2) + " mg/L";
+	// tumor size
 	document.getElementById("metric-tumor-volume").textContent = Math.round(tumorVolume * 100) + "%";
+	// response chance
 	document.getElementById("metric-response-chance").textContent = Math.round(responseChance * 100) + "%";
+	// patient health
 	document.getElementById("metric-patient-vitality").textContent = Math.round(sample.patientHealth || 100) + "%";
+	// life status
 	document.getElementById("metric-life-status").textContent = sample.lifeStatus || "Stable";
-	document.getElementById("regimen-warning-text").textContent = regimen.warning;
+	// hidden backward-compat elements
+	var regimenNameEl = document.getElementById("metric-regimen-name");
+	if (regimenNameEl) {
+		var regimen = chemoRegimenGetById(CHEMO_STATE.regimenId);
+		regimenNameEl.textContent = regimen.name;
+	}
+	var clearanceEl = document.getElementById("metric-clearance");
+	if (clearanceEl) {
+		clearanceEl.textContent = Math.round(sample.visualState.clearance * 100) + "%";
+	}
+	// update warning text
+	var warningEl = document.getElementById("regimen-warning-text");
+	if (warningEl) {
+		var reg = chemoRegimenGetById(CHEMO_STATE.regimenId);
+		warningEl.textContent = reg.warning;
+	}
+	// update time label
 	document.getElementById("time-label").textContent = sample.timeHour.toFixed(0) + " h";
 }
 
+// ============================================
+// Render teaching notes for current regimen
 function chemoUiRenderTeachingNotes() {
 	var regimen = chemoRegimenGetById(CHEMO_STATE.regimenId);
 	var noteRoot = document.getElementById("teaching-notes-list");
@@ -61,26 +91,36 @@ function chemoUiRenderTeachingNotes() {
 	noteRoot.innerHTML = markup.join("");
 }
 
+// ============================================
+// Update slider labels and scrubber bounds
 function chemoUiRenderSliderLabels() {
-	document.getElementById("tumor-sensitivity-value").textContent = chemoUiFormatMultiplier(CHEMO_STATE.tumorSensitivity);
+	document.getElementById("tumor-sensitivity-value").textContent = CHEMO_STATE.tumorSensitivity.toFixed(2) + "x";
 	document.getElementById("playback-speed-value").textContent = CHEMO_STATE.playbackSpeed.toFixed(1) + "x";
 	document.getElementById("manual-dose-time-value").textContent = CHEMO_STATE.manualDoseTimeHour.toFixed(0) + " h";
 	document.getElementById("manual-dose-amount-value").textContent = CHEMO_STATE.manualDoseAmountMg.toFixed(0) + " mg";
-	document.getElementById("manual-drug-label").textContent = CHEMO_CONSTANTS.drugs[CHEMO_STATE.manualDrugId].name;
+	// update manual drug label if element exists
+	var drugLabel = document.getElementById("manual-drug-label");
+	if (drugLabel) {
+		drugLabel.textContent = DRUG_DATA[CHEMO_STATE.manualDrugId].name;
+	}
 }
 
+// ============================================
+// Update scrubber range and position
 function chemoUiRenderScrubberBounds() {
 	var scrubber = document.getElementById("time-scrubber");
 	scrubber.max = Math.max(CHEMO_STATE.samples.length - 1, 1);
 	scrubber.value = CHEMO_STATE.currentSampleIndex;
 }
 
+// ============================================
+// Render custom dose event list
 function chemoUiRenderCustomDoseList() {
 	var list = document.getElementById("manual-dose-list");
 	var markup = [];
 	var index;
 	if (!CHEMO_STATE.customDoseEvents.length) {
-		list.innerHTML = "<div class='dose-chip'>No manual doses yet. Add one to stress the body or boost tumor response.</div>";
+		list.innerHTML = "<div class='dose-chip'>No custom doses yet.</div>";
 		return;
 	}
 	for (index = 0; index < CHEMO_STATE.customDoseEvents.length; index += 1) {
@@ -92,25 +132,17 @@ function chemoUiRenderCustomDoseList() {
 	list.innerHTML = markup.join("");
 }
 
+// ============================================
+// Render organ guide (hidden in new layout, kept for backward compat)
 function chemoUiRenderOrganGuide() {
 	var guideRoot = document.getElementById("organ-guide-root");
-	var markup = [];
-	var colorMap = {};
-	var channelIndex;
-	for (channelIndex = 0; channelIndex < CHEMO_CONSTANTS.visualChannels.length; channelIndex += 1) {
-		colorMap[CHEMO_CONSTANTS.visualChannels[channelIndex].key] = CHEMO_CONSTANTS.visualChannels[channelIndex].color;
+	if (!guideRoot || guideRoot.style.display === "none") {
+		return;
 	}
-	var index;
-	for (index = 0; index < CHEMO_CONSTANTS.organInfo.length; index += 1) {
-		var organ = CHEMO_CONSTANTS.organInfo[index];
-		markup.push(
-			"<div class='organ-guide-card'><strong><span class='organ-dot' style='background:" + colorMap[organ.key] +
-			";'></span>" + organ.label + "</strong><p>" + organ.role + "</p></div>"
-		);
-	}
-	guideRoot.innerHTML = markup.join("");
 }
 
+// ============================================
+// Full render: update all UI elements
 function chemoUiRenderAll() {
 	chemoUiRenderPresetButtons();
 	chemoUiRenderManualDrugOptions();

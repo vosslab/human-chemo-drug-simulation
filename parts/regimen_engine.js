@@ -1,31 +1,61 @@
+// ============================================
+// regimen_engine.js -- Regimen lookup and dose event generation
+// ============================================
+// Regimen source doses are mg/m2 in REGIMEN_PRESETS
+// Converted to mg using current BSA at dose-event build time
+// ============================================
+
+// ============================================
+// Look up a regimen by ID from REGIMEN_PRESETS
 function chemoRegimenGetById(regimenId) {
-	for (var index = 0; index < CHEMO_CONSTANTS.regimens.length; index += 1) {
-		if (CHEMO_CONSTANTS.regimens[index].id === regimenId) {
-			return CHEMO_CONSTANTS.regimens[index];
-		}
+	if (REGIMEN_PRESETS[regimenId]) {
+		return REGIMEN_PRESETS[regimenId];
 	}
-	return CHEMO_CONSTANTS.regimens[0];
+	// fallback to first regimen
+	return REGIMEN_PRESETS[REGIMEN_KEYS[0]];
 }
 
-function chemoRegimenBuildDoseEvents(regimenId) {
+// ============================================
+// Build dose events for a regimen, converting mg/m2 to mg using given BSA
+// Returns array of {id, drugId, label, startHour, durationHours, amountMg}
+function chemoRegimenBuildDoseEvents(regimenId, bsa) {
+	var currentBSA = bsa || SIM_DEFAULTS.patientBSA;
 	var regimen = chemoRegimenGetById(regimenId);
 	var events = [];
-	for (var index = 0; index < regimen.doseEvents.length; index += 1) {
-		var event = regimen.doseEvents[index];
-		events.push({
-			id: event.id,
-			drugId: event.drugId,
-			label: event.label,
-			startHour: event.startHour,
-			durationHours: event.durationHours,
-			amountMg: event.amountMg,
-		});
+	var dayIndex;
+	var drugIndex;
+	// generate dose events for each dose day in the cycle
+	for (dayIndex = 0; dayIndex < regimen.doseDays.length; dayIndex += 1) {
+		var doseDay = regimen.doseDays[dayIndex];
+		var startHour = doseDay * 24;
+		for (drugIndex = 0; drugIndex < regimen.drugs.length; drugIndex += 1) {
+			var drugSpec = regimen.drugs[drugIndex];
+			var drug = DRUG_DATA[drugSpec.drugKey];
+			// convert mg/m2 to mg using current BSA
+			var doseMg = Math.round(drugSpec.doseMgM2 * currentBSA);
+			var eventId = regimen.id + "-d" + doseDay + "-" + drug.id;
+			var label = "Day " + (doseDay + 1) + " " + drug.name;
+			events.push({
+				id: eventId,
+				drugId: drug.id,
+				label: label,
+				startHour: startHour + drugIndex * 0.5,
+				durationHours: drug.infusionHours,
+				amountMg: doseMg,
+			});
+		}
 	}
+	// sort by start time
+	events.sort(function(left, right) {
+		return left.startHour - right.startHour;
+	});
 	return events;
 }
 
-function chemoRegimenBuildCombinedDoseEvents(regimenId, customDoseEvents) {
-	var events = chemoRegimenBuildDoseEvents(regimenId);
+// ============================================
+// Build combined dose events: regimen doses plus any custom manual doses
+function chemoRegimenBuildCombinedDoseEvents(regimenId, customDoseEvents, bsa) {
+	var events = chemoRegimenBuildDoseEvents(regimenId, bsa);
 	var manualEvents = customDoseEvents || [];
 	var index;
 	for (index = 0; index < manualEvents.length; index += 1) {
@@ -37,11 +67,14 @@ function chemoRegimenBuildCombinedDoseEvents(regimenId, customDoseEvents) {
 	return events;
 }
 
+// ============================================
+// Build list of drug objects for a regimen
 function chemoRegimenBuildDrugList(regimenId) {
 	var regimen = chemoRegimenGetById(regimenId);
 	var drugs = [];
-	for (var index = 0; index < regimen.drugIds.length; index += 1) {
-		drugs.push(CHEMO_CONSTANTS.drugs[regimen.drugIds[index]]);
+	var index;
+	for (index = 0; index < regimen.drugKeys.length; index += 1) {
+		drugs.push(DRUG_DATA[regimen.drugKeys[index]]);
 	}
 	return drugs;
 }

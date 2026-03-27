@@ -1,173 +1,150 @@
 <body>
 <div class="page-shell">
-	<section class="hero">
-		<div class="hero-card">
-			<p class="eyebrow">Chemotherapy body simulation</p>
-			<h1>Track how a regimen rises, spreads, and clears over time.</h1>
-			<p>
-				This teaching model shows drug concentration as a function of time for a simplified
-				human body. It emphasizes trends across bloodstream, liver, kidneys, and tumor exposure,
-				with a stochastic response view for tumor shrinkage over a longer treatment window.
-			</p>
-			<ul>
-				<li>Two named regimen presets with a 30-day simulation window.</li>
-				<li>Synchronized concentration chart and stylized body-flow visual.</li>
-				<li>Manual dose timing plus patient survival feedback.</li>
-			</ul>
+	<!-- Compact header: title + orientation -->
+	<header class="app-header">
+		<div class="header-top">
+			<h1>Chemotherapy Teaching Simulation</h1>
+			<span class="header-disclaimer">Educational use only</span>
 		</div>
-		<div class="hero-card warning-card">
-			<strong>Educational use only</strong>
-			<p>
-				This page is an illustrative teaching tool. It does not predict a real patient's drug
-				levels and must not be used for treatment or dosing decisions.
-			</p>
-			<p id="regimen-warning-text"></p>
+		<p class="header-orientation">
+			Modeled drug exposure and distribution over a treatment cycle.
+			Higher intensity indicates higher organ exposure.
+		</p>
+	</header>
+
+	<!-- Regimen presets: primary entry point -->
+	<section class="controls-bar">
+		<div class="preset-row">
+			<div id="preset-button-grid" class="preset-grid"></div>
+		</div>
+		<div class="playback-bar">
+			<button id="play-button" class="action-button play-btn" type="button">Play</button>
+			<button id="pause-button" class="action-button" type="button">Pause</button>
+			<button id="reset-button" class="action-button" type="button">Reset</button>
+			<button id="step-button" class="action-button" type="button">Step</button>
+			<div class="speed-control">
+				<label for="playback-speed-slider">Speed</label>
+				<input id="playback-speed-slider" type="range" min="0.5" max="4" step="0.5" value="1">
+				<strong id="playback-speed-value">1.0x</strong>
+			</div>
 		</div>
 	</section>
 
-	<section class="main-grid">
-		<aside class="panel">
-			<div class="control-stack">
-				<div>
-					<h2>Regimen Presets</h2>
-					<div id="preset-button-grid" class="preset-grid"></div>
+	<!-- Main visualization: chart + body side by side -->
+	<section class="visual-grid">
+		<div class="panel chart-wrap">
+			<h2>Concentration Timeline</h2>
+			<div id="chart-root"></div>
+			<div id="chart-legend" class="legend-row"></div>
+		</div>
+		<div class="panel body-card">
+			<h2>Body Flow View</h2>
+			<div id="body-visual-root"></div>
+			<div id="patient-health-bar-root"></div>
+		</div>
+	</section>
+
+	<!-- Time scrubber: full width -->
+	<section class="scrubber-section">
+		<label class="scrubber-label" for="time-scrubber">
+			<span>Time</span>
+			<strong id="time-label">0 h</strong>
+		</label>
+		<input id="time-scrubber" type="range" min="0" max="1" step="1" value="0">
+	</section>
+
+	<!-- Stats strip: compact metrics -->
+	<section class="stats-strip">
+		<div class="stat-chip">
+			<span>Current burden</span>
+			<strong id="metric-total-burden">0 mg/L</strong>
+		</div>
+		<div class="stat-chip">
+			<span>Max burden</span>
+			<strong id="metric-peak-exposure">0 mg/L</strong>
+		</div>
+		<div class="stat-chip">
+			<span>Tumor size</span>
+			<strong id="metric-tumor-volume">100%</strong>
+		</div>
+		<div class="stat-chip">
+			<span>Response</span>
+			<strong id="metric-response-chance">0%</strong>
+		</div>
+		<div class="stat-chip">
+			<span>Patient health</span>
+			<strong id="metric-patient-vitality">100%</strong>
+		</div>
+		<div class="stat-chip">
+			<span>Status</span>
+			<strong id="metric-life-status">Stable</strong>
+		</div>
+	</section>
+
+	<!-- Collapsible: explore custom dosing -->
+	<section class="collapsible-section">
+		<button id="toggle-custom-dosing" class="collapsible-toggle" type="button" aria-expanded="false">
+			Explore custom dosing (educational)
+		</button>
+		<div id="custom-dosing-panel" class="collapsible-content" style="display: none;">
+			<div class="custom-dose-grid">
+				<div class="control-group">
+					<label for="manual-drug-select">Drug</label>
+					<select id="manual-drug-select" class="select-input"></select>
 				</div>
-				<div>
-					<h2>Simulation Controls</h2>
-					<div class="slider-row">
-						<label class="slider-label" for="tumor-sensitivity-slider">
-							<span>Treatment sensitivity</span>
-							<strong id="tumor-sensitivity-value">1.00x</strong>
-						</label>
-						<input id="tumor-sensitivity-slider" type="range" min="0.6" max="1.5" step="0.01" value="1.00">
-					</div>
-					<div class="slider-row">
-						<label class="slider-label" for="playback-speed-slider">
-							<span>Playback speed</span>
-							<strong id="playback-speed-value">1.0x</strong>
-						</label>
-						<input id="playback-speed-slider" type="range" min="0.5" max="4" step="0.5" value="1">
-					</div>
+				<div class="control-group">
+					<label for="manual-dose-time-slider">
+						Dose time <strong id="manual-dose-time-value">24 h</strong>
+					</label>
+					<input id="manual-dose-time-slider" type="range" min="0" max="720" step="2" value="24">
 				</div>
-				<div>
-					<h2>Manual Dose Sandbox</h2>
-					<div class="slider-row">
-						<label class="slider-label" for="manual-drug-select">
-							<span>Drug</span>
-							<strong id="manual-drug-label">Doxorubicin</strong>
-						</label>
-						<select id="manual-drug-select" class="select-input"></select>
-					</div>
-					<div class="slider-row">
-						<label class="slider-label" for="manual-dose-time-slider">
-							<span>Dose time</span>
-							<strong id="manual-dose-time-value">24 h</strong>
-						</label>
-						<input id="manual-dose-time-slider" type="range" min="0" max="720" step="2" value="24">
-					</div>
-					<div class="slider-row">
-						<label class="slider-label" for="manual-dose-amount-slider">
-							<span>Dose amount</span>
-							<strong id="manual-dose-amount-value">120 mg</strong>
-						</label>
-						<input id="manual-dose-amount-slider" type="range" min="20" max="1200" step="10" value="120">
-					</div>
-					<div class="playback-row">
-						<button id="add-dose-button" class="action-button" type="button">Add dose</button>
-						<button id="clear-doses-button" class="action-button" type="button">Clear doses</button>
-					</div>
-					<div id="manual-dose-list" class="dose-list"></div>
+				<div class="control-group">
+					<label for="manual-dose-amount-slider">
+						Dose amount <strong id="manual-dose-amount-value">120 mg</strong>
+					</label>
+					<input id="manual-dose-amount-slider" type="range" min="20" max="1200" step="10" value="120">
 				</div>
-				<div>
-					<h2>Playback</h2>
-					<div class="playback-row">
-						<button id="play-button" class="action-button" type="button">Play</button>
-						<button id="pause-button" class="action-button" type="button">Pause</button>
-						<button id="reset-button" class="action-button" type="button">Reset</button>
-						<button id="step-button" class="action-button" type="button">Step</button>
-					</div>
-				</div>
-				<div>
-					<h2>Time Scrubber</h2>
-					<div class="slider-row">
-						<label class="slider-label" for="time-scrubber">
-							<span>Current sample</span>
-							<strong id="time-label">0 h</strong>
-						</label>
-						<input id="time-scrubber" type="range" min="0" max="1" step="1" value="0">
-					</div>
+				<div class="control-group">
+					<label for="tumor-sensitivity-slider">
+						Tumor response sensitivity <strong id="tumor-sensitivity-value">1.00x</strong>
+					</label>
+					<input id="tumor-sensitivity-slider" type="range" min="0.6" max="1.5" step="0.01" value="1.00">
 				</div>
 			</div>
-		</aside>
-
-		<main>
-			<section class="metrics-grid">
-				<div class="metric-card">
-					<span>Regimen</span>
-					<strong id="metric-regimen-name">ABVD</strong>
-				</div>
-				<div class="metric-card">
-					<span>Total burden</span>
-					<strong id="metric-total-burden">0 mg/L</strong>
-				</div>
-				<div class="metric-card">
-					<span>Peak exposure</span>
-					<strong id="metric-peak-exposure">0 mg/L</strong>
-				</div>
-				<div class="metric-card">
-					<span>Clearance bias</span>
-					<strong id="metric-clearance">0%</strong>
-				</div>
-				<div class="metric-card">
-					<span>Tumor size</span>
-					<strong id="metric-tumor-volume">100%</strong>
-				</div>
-				<div class="metric-card">
-					<span>Response chance</span>
-					<strong id="metric-response-chance">0%</strong>
-				</div>
-				<div class="metric-card">
-					<span>Patient vitality</span>
-					<strong id="metric-patient-vitality">100%</strong>
-				</div>
-				<div class="metric-card">
-					<span>Life status</span>
-					<strong id="metric-life-status">Stable</strong>
-				</div>
-			</section>
-
-			<section class="visual-grid">
-				<div class="panel chart-wrap">
-					<h2>Concentration Timeline</h2>
-					<div id="chart-root"></div>
-					<div id="chart-legend" class="legend-row"></div>
-				</div>
-				<div class="panel body-card">
-					<h2>Body Flow View</h2>
-					<div id="body-visual-root"></div>
-					<div id="patient-health-bar-root"></div>
-					<div id="body-status-root" class="body-status-grid"></div>
-					<div id="organ-guide-root" class="organ-guide-grid"></div>
-				</div>
-			</section>
-
-			<section class="note-grid">
-				<div class="note-card">
-					<h3>Teaching Notes</h3>
-					<ul id="teaching-notes-list" class="teaching-list"></ul>
-				</div>
-				<div class="note-card">
-					<h3>What This Model Simplifies</h3>
-					<p>
-						The model compresses many real pharmacokinetic processes into a readable two-compartment
-						system. It highlights relative trends, not real clinical values.
-					</p>
-					<p class="footer-note">
-						Named presets are included as recognizable classroom examples with generalized,
-						illustrative parameter values.
-					</p>
-				</div>
-			</section>
-		</main>
+			<div class="custom-dose-actions">
+				<button id="add-dose-button" class="action-button" type="button">Add dose</button>
+				<button id="clear-doses-button" class="action-button" type="button">Clear doses</button>
+			</div>
+			<div id="manual-dose-list" class="dose-list"></div>
+		</div>
 	</section>
+
+	<!-- Teaching notes: contextual, shown when regimen selected -->
+	<section class="teaching-section">
+		<div class="note-card" id="teaching-notes-card">
+			<h3>Teaching Notes</h3>
+			<ul id="teaching-notes-list" class="teaching-list"></ul>
+			<p class="model-note">
+				Simulated response is illustrative, not patient-specific.
+				Model shows relative trends, not clinical predictions.
+			</p>
+		</div>
+	</section>
+
+	<!-- Regimen warning text (hidden, used by JS) -->
+	<span id="regimen-warning-text" style="display: none;"></span>
+	<!-- Manual drug label (hidden, used by JS) -->
+	<strong id="manual-drug-label" style="display: none;">Doxorubicin</strong>
+	<!-- Hidden metric for backward compat -->
+	<span id="metric-regimen-name" style="display: none;">ABVD</span>
+	<span id="metric-clearance" style="display: none;">0%</span>
+	<!-- Body status root (hidden, organ info now on diagram) -->
+	<div id="body-status-root" style="display: none;"></div>
+	<!-- Organ guide (removed, info on diagram labels) -->
+	<div id="organ-guide-root" style="display: none;"></div>
+
+	<!-- Footer disclaimer -->
+	<footer class="app-footer">
+		<p>Educational use only. Not for clinical dosing decisions.</p>
+	</footer>
 </div>

@@ -1,3 +1,49 @@
+## 2026-03-27
+
+### Additions and New Features
+
+- Merged two parallel simulation implementations (parts/ and parts2/) into a single canonical `parts/` directory.
+- Replaced stochastic PK model with mathematically correct exponential decay: one-compartment `C(t) = C0 * e^(-ke*t)` and two-compartment biphasic `A*e^(-alpha*t) + B*e^(-beta*t)` with dose superposition.
+- Expanded drug database from 7 to 10 drugs with clinical PK parameters: 5-FU, doxorubicin, cisplatin, methotrexate, cyclophosphamide, bleomycin, vinblastine, dacarbazine, oxaliplatin, leucovorin.
+- Expanded regimen presets from 2 to 4: ABVD, FOLFOX, BEP, CMF with BSA-sensitive dose calculation.
+- Added organ extraction ratio system (hepatic/renal/biliary routes) for organ concentration modeling.
+- Added `tests/web/test_pk_calibration.js` with 30 validation tests covering PK math, superposition, organ concentrations, and calibration scenarios.
+
+### Behavior or Interface Changes
+
+- Redesigned UI from sidebar + hero layout to interaction-first layout: regimen presets and playback controls at top, chart + body visualization dominant, compact stats strip, collapsible custom dosing section.
+- Removed hero section (3 paragraphs), sidebar (5 control sections), 8 metric cards, 9 body status pills, and organ guide section.
+- Added "Educational use only" inline disclaimer and model note: "Simulated response is illustrative, not patient-specific."
+- Regimen click loads simulation at t=0 without autoplay; user presses Play when ready.
+- Custom dosing section labeled "Explore custom dosing (educational)" with collapsible toggle.
+- Added canonical unit system: internal time in minutes, Vd in L/kg converted at computation time, doses in mg/m2 converted at dose-event build time.
+
+### Fixes and Maintenance
+
+- Fixed parts2/ Vd bug: volume of distribution was stored as L/kg but multiplied by patient weight to give absurd total volumes (e.g., 1750L for doxorubicin), causing all concentrations to display as "0.00".
+- Fixed parts2/ regimen UX bug: clicking a regimen preset did not administer doses until separate "Administer" button was clicked.
+- Retuned tumor response, tumor volume, and patient health functions against new exponential decay concentration scale.
+
+### Removals and Deprecations
+
+- None yet. parts2/ directory frozen pending final verification before removal.
+
+### Decisions and Failures
+
+- Chose parts/ as base (working build + tests) and ported PK math and drug data from parts2/.
+- Kept SVG body visualization (135 lines) over parts2/'s canvas approach (819 lines) for simplicity.
+- Deferred comparison mode (parts2/'s dual-panel feature) to future work; architecture kept open.
+- Kept light stochastic variation only in tumor response, labeled as pedagogic noise.
+- Product direction: educational PK sandbox answering "what happens if I change this?" not "what should I choose?"
+
+### Developer Tests and Notes
+
+- `bash build_app.sh`
+- `node --check parts/constants.js && node --check parts/pk_engine.js`
+- `node tests/web/test_pk_calibration.js`
+- `source source_me.sh && python3 -m pytest tests/web/test_web_build.py -q`
+- `source source_me.sh && python3 -m pytest tests/test_ascii_compliance.py -q`
+
 ## 2026-03-23
 
 ### Additions and New Features

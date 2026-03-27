@@ -1,13 +1,18 @@
 var CHEMO_STATE = {
-	regimenId: CHEMO_CONSTANTS.regimens[0].id,
+	regimenId: REGIMEN_KEYS[0],
 	bodyScale: 1,
 	tumorSensitivity: 1,
 	playbackSpeed: 1,
 	simulationRunId: 1,
+	// configurable patient parameters
+	bsa: SIM_DEFAULTS.patientBSA,
+	weightKg: SIM_DEFAULTS.patientWeightKg,
+	// manual dose controls
 	manualDrugId: "doxorubicin",
 	manualDoseTimeHour: 24,
 	manualDoseAmountMg: 120,
 	customDoseEvents: [],
+	// simulation data
 	samples: [],
 	currentSampleIndex: 0,
 	peakExposure: 0,
