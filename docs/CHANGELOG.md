@@ -1,3 +1,9 @@
+## 2026-03-29
+
+### Fixes and Maintenance
+
+- Cleaned up README.md: removed internal plan link, tightened doc descriptions.
+
 ## 2026-03-27
 
 ### Additions and New Features

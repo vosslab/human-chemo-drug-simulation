@@ -8,11 +8,10 @@ response model with tumor shrinkage across a longer 30-day window in one self-co
 ## Documentation
 
 - [docs/USAGE.md](docs/USAGE.md): Build and test commands for the web app.
-- [docs/active_plans/CHEMOTHERAPY_BODY_SIMULATION_PLAN.md](docs/active_plans/CHEMOTHERAPY_BODY_SIMULATION_PLAN.md): Current implementation plan and scope notes.
-- [docs/CHANGELOG.md](docs/CHANGELOG.md): Repository-specific history of changes.
-- [docs/REPO_STYLE.md](docs/REPO_STYLE.md): Repository structure, naming, versioning, dependency manifest, and licensing conventions.
-- [docs/PYTHON_STYLE.md](docs/PYTHON_STYLE.md): Python implementation rules for formatting, structure, imports, argparse, and testing.
-- [docs/MARKDOWN_STYLE.md](docs/MARKDOWN_STYLE.md): Markdown writing and formatting conventions for repository documentation.
+- [docs/CHANGELOG.md](docs/CHANGELOG.md): History of changes.
+- [docs/REPO_STYLE.md](docs/REPO_STYLE.md): Repository structure, naming, and versioning conventions.
+- [docs/PYTHON_STYLE.md](docs/PYTHON_STYLE.md): Python formatting, imports, and testing rules.
+- [docs/MARKDOWN_STYLE.md](docs/MARKDOWN_STYLE.md): Markdown writing and formatting conventions.
 
 ## Quick start
 
