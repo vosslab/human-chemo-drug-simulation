@@ -2,6 +2,21 @@ function chemoChartFormatMg(value) {
 	return value.toFixed(2) + " mg/L";
 }
 
+function chemoChartBuildTherapeuticBand(width, height, padding, minY, maxY, config) {
+	var regimen = chemoRegimenGetById(config.regimenId);
+	var windowSpec = regimen.therapeuticWindow || { ineffectiveMax: 1.5, toxicMin: 12 };
+	var plotHeight = height - (padding * 2);
+	var ineffectiveY = chemoChartMapLogY(windowSpec.ineffectiveMax, minY, maxY, plotHeight, height, padding);
+	var toxicY = chemoChartMapLogY(windowSpec.toxicMin, minY, maxY, plotHeight, height, padding);
+	return "" +
+		"<rect x='" + padding + "' y='" + padding + "' width='" + (width - (padding * 2)) + "' height='" + Math.max(0, toxicY - padding).toFixed(1) + "' fill='rgba(183, 69, 58, 0.05)' />" +
+		"<rect x='" + padding + "' y='" + toxicY.toFixed(1) + "' width='" + (width - (padding * 2)) + "' height='" + Math.max(0, ineffectiveY - toxicY).toFixed(1) + "' fill='rgba(85, 156, 96, 0.10)' />" +
+		"<rect x='" + padding + "' y='" + ineffectiveY.toFixed(1) + "' width='" + (width - (padding * 2)) + "' height='" + Math.max(0, (height - padding) - ineffectiveY).toFixed(1) + "' fill='rgba(215, 186, 104, 0.10)' />" +
+		"<text x='" + (width - padding - 4) + "' y='" + (toxicY + 12).toFixed(1) + "' text-anchor='end' fill='#8d1d1d' font-size='11' font-weight='700'>TOXIC</text>" +
+		"<text x='" + (width - padding - 4) + "' y='" + (ineffectiveY - 6).toFixed(1) + "' text-anchor='end' fill='#2d7049' font-size='11' font-weight='700'>THERAPEUTIC WINDOW</text>" +
+		"<text x='" + (width - padding - 4) + "' y='" + (height - padding - 6) + "' text-anchor='end' fill='#8d7a3a' font-size='11' font-weight='700'>INEFFECTIVE</text>";
+}
+
 function chemoChartBuildXAxisTicks(maxTimeHour, width, height, padding) {
 	var tickMarkup = [];
 	var index;
@@ -135,6 +150,7 @@ function chemoChartRender() {
 	}
 	var maxTimeHour = samples[samples.length - 1].timeHour;
 	var xAxisTicks = chemoChartBuildXAxisTicks(maxTimeHour, width, height, padding);
+	var therapeuticBand = chemoChartBuildTherapeuticBand(width, height, padding, minY, maxScaleY, CHEMO_STATE);
 	var doseMarkerMarkup = [];
 	var doseEvents = chemoRegimenBuildDoseEvents(
 		CHEMO_STATE.regimenId,
@@ -193,6 +209,7 @@ function chemoChartRender() {
 	var svg = "" +
 		"<svg class='chart-svg' viewBox='0 0 " + width + " " + height + "' role='img' aria-label='Chemotherapy concentration chart'>" +
 		"<rect x='0' y='0' width='" + width + "' height='" + height + "' rx='18' fill='#fffdf8' />" +
+		therapeuticBand +
 		gridLines.join("") +
 		doseMarkerMarkup.join("") +
 		"<line x1='" + padding + "' y1='" + (height - padding) + "' x2='" + (width - padding) + "' y2='" + (height - padding) + "' stroke='#1f2a33' stroke-width='1.5' />" +
@@ -202,7 +219,7 @@ function chemoChartRender() {
 		lineMarkup.join("") +
 		"</svg>" +
 		"<p class='footer-note'>Current time: <strong>" + chemoChartFormatTimeHour(currentSample.timeHour) +
-		"</strong>. Y-axis uses a log scale. Pale vertical lines mark dose administrations; the dashed line shows total burden across all active drugs, and the red overlay marks the post-death interval.</p>";
+		"</strong>. Y-axis uses a log scale. Pale vertical lines mark dose administrations; the dashed line shows total burden across all active drugs, and the colored band shows ineffective, therapeutic, and toxic exposure zones.</p>";
 	chartRoot.innerHTML = svg;
 	var legendMarkup = [];
 	for (index = 0; index < regimenDrugs.length; index += 1) {

@@ -63,10 +63,38 @@ function chemoVisualGetTumorMetrics(sample) {
 	};
 }
 
+function chemoVisualGetTumorSite(regimenName) {
+	var regimenIndex;
+	for (regimenIndex = 0; regimenIndex < CHEMO_CONSTANTS.regimens.length; regimenIndex += 1) {
+		var regimen = CHEMO_CONSTANTS.regimens[regimenIndex];
+		if (regimen.name === regimenName) {
+			return regimen.tumorSite || {
+				label: "Tumor",
+				cx: 226,
+				cy: 208,
+				labelX: 304,
+				labelY: 192,
+				lineToX: 300,
+				lineToY: 188,
+			};
+		}
+	}
+	return {
+		label: "Tumor",
+		cx: 226,
+		cy: 208,
+		labelX: 304,
+		labelY: 192,
+		lineToX: 300,
+		lineToY: 188,
+	};
+}
+
 function chemoVisualRenderBody() {
 	var currentSample = chemoStateGetCurrentSample();
 	var visualState = currentSample.visualState;
 	var tumorMetrics = chemoVisualGetTumorMetrics(currentSample);
+	var tumorSite = chemoVisualGetTumorSite(currentSample.regimenName);
 	var root = document.getElementById("body-visual-root");
 	var statusRoot = document.getElementById("body-status-root");
 	var tumorRadius = tumorMetrics.tumorRadius.toFixed(1);
@@ -86,22 +114,22 @@ function chemoVisualRenderBody() {
 		"<ellipse cx='145' cy='214' rx='34' ry='24' fill='" + chemoVisualColor("liver", visualState.liver) + "' stroke='rgba(221,139,61,0.55)' />" +
 		"<ellipse cx='138' cy='274' rx='20' ry='34' fill='" + chemoVisualColor("kidney", visualState.kidney) + "' stroke='rgba(74,125,178,0.55)' />" +
 		"<ellipse cx='222' cy='274' rx='20' ry='34' fill='" + chemoVisualColor("kidney", visualState.kidney) + "' stroke='rgba(74,125,178,0.55)' />" +
-		(tumorMetrics.tumorRadius > 0 ? "<circle cx='226' cy='208' r='" + tumorGlowRadius + "' fill='rgba(126,91,214,0.12)' />" : "") +
-		(tumorMetrics.tumorRadius > 0 ? "<circle cx='226' cy='208' r='" + tumorRadius + "' fill='" + chemoVisualColor("tumor", visualState.tumor) + "' stroke='rgba(126,91,214,0.78)' stroke-width='3' />" : "") +
-		(tumorMetrics.tumorRadius > 0 ? "<circle cx='236' cy='196' r='" + tumorCoreRadius + "' fill='rgba(255,255,255,0.12)' />" : "") +
+		(tumorMetrics.tumorRadius > 0 ? "<circle cx='" + tumorSite.cx + "' cy='" + tumorSite.cy + "' r='" + tumorGlowRadius + "' fill='rgba(126,91,214,0.12)' />" : "") +
+		(tumorMetrics.tumorRadius > 0 ? "<circle cx='" + tumorSite.cx + "' cy='" + tumorSite.cy + "' r='" + tumorRadius + "' fill='" + chemoVisualColor("tumor", visualState.tumor) + "' stroke='rgba(126,91,214,0.78)' stroke-width='3' />" : "") +
+		(tumorMetrics.tumorRadius > 0 ? "<circle cx='" + (tumorSite.cx + 10) + "' cy='" + (tumorSite.cy - 12) + "' r='" + tumorCoreRadius + "' fill='rgba(255,255,255,0.12)' />" : "") +
 		"<path d='M162 182 C170 214, 160 246, 150 266' fill='none' stroke='" + chemoVisualColor("clearance", visualState.clearance) + "' stroke-width='7' stroke-linecap='round' />" +
 		"<path d='M200 182 C210 216, 220 240, 228 266' fill='none' stroke='" + chemoVisualColor("clearance", visualState.clearance) + "' stroke-width='7' stroke-linecap='round' />" +
 		"<g fill='none' stroke='#5b6a73' stroke-width='1.6'>" +
 		"<path d='M210 142 L284 120' />" +
 		"<path d='M172 214 L78 206' />" +
 		"<path d='M138 302 L58 332' />" +
-		"<path d='M226 204 L300 188' />" +
+		"<path d='M" + tumorSite.cx + " " + tumorSite.cy + " L" + tumorSite.lineToX + " " + tumorSite.lineToY + "' />" +
 		"</g>" +
 		"<g fill='#1f2a33' font-size='13' font-family='Avenir Next, Segoe UI, sans-serif'>" +
 		"<text x='288' y='122'>Bloodstream</text>" +
 		"<text x='26' y='210'>Liver</text>" +
 		"<text x='18' y='338'>Kidneys</text>" +
-		"<text x='304' y='192'>Tumor</text>" +
+		"<text x='" + tumorSite.labelX + "' y='" + tumorSite.labelY + "'>" + tumorSite.label + "</text>" +
 		"</g>" +
 		"<text x='180' y='28' text-anchor='middle' fill='#5b6a73' font-size='14'>Drug processing and stochastic response view</text>" +
 		"<text x='180' y='446' text-anchor='middle' fill='#1f2a33' font-size='14'>Patient status: " + lifeStatus + "</text>" +

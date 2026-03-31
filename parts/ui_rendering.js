@@ -118,6 +118,81 @@ function chemoUiRenderAdverseEffects() {
 	redRoot.innerHTML = buckets.red.length ? buckets.red.join("") : "<div class='effect-empty'>No red effects.</div>";
 }
 
+function chemoUiRenderScenarioPanel() {
+	var caseRoot = document.getElementById("case-summary-root");
+	var summaryRoot = document.getElementById("run-summary-root");
+	var eventRoot = document.getElementById("event-log-root");
+	var sample = chemoStateGetCurrentSample();
+	var caseProfile = CHEMO_STATE.caseProfile;
+	var runSummary = CHEMO_STATE.runSummary;
+	if (caseRoot) {
+		if (!CHEMO_STATE.caseModeEnabled || !caseProfile) {
+			caseRoot.innerHTML = "<p class='scenario-empty'>Case Mode is off. Turn it on to generate a hidden patient scenario.</p>";
+		} else {
+			caseRoot.innerHTML = "" +
+				"<div class='scenario-kv'><span>Regimen goal</span><strong>" + caseProfile.goal + "</strong></div>" +
+				"<div class='scenario-kv'><span>Hidden organ reserve</span><strong>Renal " + Math.round(caseProfile.renalReserve * 100) + "% / Hepatic " + Math.round(caseProfile.hepaticReserve * 100) + "% / Marrow " + Math.round(caseProfile.marrowReserve * 100) + "%</strong></div>" +
+				"<div class='scenario-kv'><span>Mystery trait</span><strong>" + (caseProfile.revealed ? caseProfile.mysteryTraitLabel : "Hidden until reveal") + "</strong></div>" +
+				"<p class='model-note'>" + (caseProfile.revealed ? caseProfile.mysteryTraitDescription : "Infer the hidden trait from the burden curve, toxicity pattern, and final grade.") + "</p>";
+		}
+	}
+	if (summaryRoot) {
+		if (!runSummary) {
+			summaryRoot.innerHTML = "<p class='scenario-empty'>No run summary available.</p>";
+		} else {
+			summaryRoot.innerHTML = "" +
+				"<div class='grade-pill grade-" + runSummary.grade.toLowerCase() + "'>Grade " + runSummary.grade + " <span>" + runSummary.totalScore + "/100</span></div>" +
+				"<div class='score-grid'>" +
+				"<div class='score-chip'><span>Tumor reduction</span><strong>" + runSummary.tumorReduction + "%</strong></div>" +
+				"<div class='score-chip'><span>Toxicity burden</span><strong>" + runSummary.toxicityBurden + "%</strong></div>" +
+				"<div class='score-chip'><span>Survival</span><strong>" + runSummary.survival + "%</strong></div>" +
+				"<div class='score-chip'><span>Speed</span><strong>" + runSummary.speed + "%</strong></div>" +
+				"<div class='score-chip'><span>Over-treatment penalty</span><strong>-" + runSummary.overTreatmentPenalty + "</strong></div>" +
+				"</div>";
+		}
+	}
+	if (eventRoot) {
+		var events = sample && sample.eventLog ? sample.eventLog : [];
+		if (!events.length) {
+			eventRoot.innerHTML = "<div class='scenario-empty'>No notable events yet.</div>";
+		} else {
+			var markup = [];
+			var startIndex = Math.max(0, events.length - 8);
+			var index;
+			for (index = startIndex; index < events.length; index += 1) {
+				markup.push("<div class='event-row'>" + events[index] + "</div>");
+			}
+			eventRoot.innerHTML = markup.join("");
+		}
+	}
+}
+
+function chemoUiRenderRevealTraitStatus() {
+	var button = document.getElementById("reveal-trait-button");
+	var status = document.getElementById("reveal-trait-status");
+	var caseProfile = CHEMO_STATE.caseProfile;
+	if (!button || !status) {
+		return;
+	}
+	if (!CHEMO_STATE.caseModeEnabled || !caseProfile) {
+		button.disabled = true;
+		button.textContent = "Reveal Mystery Trait";
+		button.classList.remove("is-revealed");
+		status.textContent = "Case Mode off";
+		return;
+	}
+	button.disabled = false;
+	if (caseProfile.revealed) {
+		button.textContent = "Trait Revealed";
+		button.classList.add("is-revealed");
+		status.textContent = caseProfile.mysteryTraitLabel + ": " + caseProfile.mysteryTraitDescription;
+		return;
+	}
+	button.textContent = "Reveal Mystery Trait";
+	button.classList.remove("is-revealed");
+	status.textContent = "Mystery trait hidden";
+}
+
 // ============================================
 // Update slider labels and scrubber bounds
 function chemoUiRenderSliderLabels() {
@@ -137,6 +212,9 @@ function chemoUiRenderSliderLabels() {
 	document.getElementById("activity-value").textContent = CHEMO_STATE.activityLevel >= 0.66 ? "Active" : (CHEMO_STATE.activityLevel >= 0.33 ? "Moderate" : "Sedentary");
 	document.getElementById("tumor-sensitivity-value").textContent = CHEMO_STATE.tumorSensitivity.toFixed(2) + "x";
 	document.getElementById("playback-speed-value").textContent = CHEMO_STATE.playbackSpeed.toFixed(1) + "x";
+	document.getElementById("randomness-mode-select").value = CHEMO_STATE.randomnessMode;
+	document.getElementById("case-mode-toggle").checked = CHEMO_STATE.caseModeEnabled;
+	chemoUiRenderRevealTraitStatus();
 }
 
 // ============================================
@@ -171,6 +249,7 @@ function chemoUiRenderAll() {
 	chemoUiRenderMetrics();
 	chemoUiRenderTeachingNotes();
 	chemoUiRenderAdverseEffects();
+	chemoUiRenderScenarioPanel();
 	chemoUiRenderSliderLabels();
 	chemoUiRenderScrubberBounds();
 	chemoUiRenderOrganGuide();

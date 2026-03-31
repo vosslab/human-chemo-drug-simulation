@@ -12,6 +12,9 @@
 - Reworked the adverse-effects display into separate green, yellow, and red panels, with each major side effect categorized by current severity instead of only present versus absent.
 - Strengthened the concentration-chart death indicator with a prominent red post-death overlay and banner so fatal toxicity is visually obvious even when death occurs near the right edge of the timeline.
 - Changed adverse effects from deterministic risk projection to realized simulated symptoms, using random rolls each timestep so effects like fever or nausea can actually be present, absent, or severe in the current patient state.
+- Added regimen-specific efficacy and toxicity weights so presets now differ not just by PK timing and included drugs, but also by tumor-kill strength, toxicity intensity, recovery drag, and volatility.
+- Added preset-specific tumor locations so the body view places the mass in a more anatomically appropriate region for lymphoma, colorectal, testicular, and breast cancer teaching presets.
+- Added a gameplay layer tied to the existing PK model: therapeutic-window exposure banding on the concentration chart, Case Mode with hidden patient scenario generation, mystery-trait reveal, end-of-run grading, event-log playback, randomness-mode controls, and dynamic simulation duration based on the last scheduled dose plus washout.
 
 ## 2026-03-27
 

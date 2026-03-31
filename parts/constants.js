@@ -58,6 +58,39 @@ var CHEMO_ORGAN_INFO = [
 	{ key: "tumor", label: "Tumor", role: "Receives exposure that can reduce tumor mass over time." },
 ];
 
+var CHEMO_CASE_TRAITS = [
+	{
+		key: "fast_clearer",
+		label: "Fast clearer",
+		description: "Drugs clear faster than expected, reducing exposure windows.",
+		clearanceMultiplier: 1.18,
+		resilienceMultiplier: 1.02,
+	},
+	{
+		key: "fragile_marrow",
+		label: "Fragile marrow",
+		description: "Bone marrow reserve is limited, increasing delayed toxicity.",
+		clearanceMultiplier: 1.0,
+		resilienceMultiplier: 0.84,
+	},
+	{
+		key: "chemo_resistant",
+		label: "Chemo-resistant tumor",
+		description: "Tumor kill is blunted despite otherwise adequate exposure.",
+		clearanceMultiplier: 1.0,
+		resilienceMultiplier: 1.0,
+		efficacyMultiplier: 0.82,
+	},
+	{
+		key: "renal_vulnerability",
+		label: "Renal vulnerability",
+		description: "Kidney reserve is low and renal-cleared drugs become more dangerous.",
+		clearanceMultiplier: 0.90,
+		resilienceMultiplier: 0.92,
+		renalReserve: 0.72,
+	},
+];
+
 // ============================================
 // Drug pharmacokinetic parameter database
 // Source units: vdLPerKg (L/kg), halfLife in minutes, dose in mg/m2
@@ -313,6 +346,25 @@ var REGIMEN_PRESETS = {
 		name: "ABVD",
 		subtitle: "Hodgkin lymphoma teaching preset",
 		indication: "Hodgkin lymphoma teaching preset",
+		efficacyWeight: 1.15,
+		acuteToxicityWeight: 1.00,
+		cumulativeToxicityWeight: 0.95,
+		recoveryPenalty: 1.00,
+		volatility: 1.05,
+		therapeuticWindow: {
+			ineffectiveMax: 1.8,
+			toxicMin: 14,
+		},
+		tumorSite: {
+			key: "mediastinum",
+			label: "Mediastinal mass",
+			cx: 214,
+			cy: 170,
+			labelX: 304,
+			labelY: 172,
+			lineToX: 286,
+			lineToY: 168,
+		},
 		cycleDays: 28,
 		drugKeys: ["doxorubicin", "bleomycin", "vinblastine", "dacarbazine"],
 		drugs: [
@@ -332,6 +384,10 @@ var REGIMEN_PRESETS = {
 			"Bleomycin clears faster than doxorubicin, which makes late-cycle exposure profiles diverge.",
 			"The tumor channel stays elevated longer when tissue affinity is high, even as bloodstream levels fall.",
 		],
+		caseGoals: [
+			"Reach remission without dropping vitality below 55%.",
+			"Keep pulmonary toxicity out of red while preserving tumor response.",
+		],
 		warning: "Illustrative ABVD timing only. The values are generalized for teaching trends.",
 	},
 	folfox: {
@@ -339,6 +395,25 @@ var REGIMEN_PRESETS = {
 		name: "FOLFOX",
 		subtitle: "Colorectal cancer teaching preset",
 		indication: "Colorectal cancer teaching preset",
+		efficacyWeight: 1.00,
+		acuteToxicityWeight: 0.92,
+		cumulativeToxicityWeight: 1.12,
+		recoveryPenalty: 1.08,
+		volatility: 0.92,
+		therapeuticWindow: {
+			ineffectiveMax: 1.5,
+			toxicMin: 11,
+		},
+		tumorSite: {
+			key: "colon_liver",
+			label: "Colon / liver lesion",
+			cx: 158,
+			cy: 238,
+			labelX: 28,
+			labelY: 162,
+			lineToX: 114,
+			lineToY: 214,
+		},
 		cycleDays: 14,
 		drugKeys: ["oxaliplatin", "leucovorin", "fluorouracil"],
 		drugs: [
@@ -355,6 +430,10 @@ var REGIMEN_PRESETS = {
 			"Leucovorin changes the combined exposure without dominating total burden.",
 			"Long infusion windows flatten the curve and sustain tumor exposure longer than a bolus alone.",
 		],
+		caseGoals: [
+			"Control tumor burden while avoiding sustained neuropathy.",
+			"Stay within the therapeutic window for at least half the run.",
+		],
 		warning: "Illustrative FOLFOX timing only. The values are generalized for teaching trends.",
 	},
 	bep: {
@@ -362,6 +441,25 @@ var REGIMEN_PRESETS = {
 		name: "BEP",
 		subtitle: "Testicular cancer teaching preset",
 		indication: "Testicular cancer teaching preset",
+		efficacyWeight: 1.24,
+		acuteToxicityWeight: 1.18,
+		cumulativeToxicityWeight: 1.14,
+		recoveryPenalty: 1.18,
+		volatility: 1.18,
+		therapeuticWindow: {
+			ineffectiveMax: 2.4,
+			toxicMin: 12.5,
+		},
+		tumorSite: {
+			key: "testicular",
+			label: "Testicular tumor",
+			cx: 214,
+			cy: 350,
+			labelX: 286,
+			labelY: 336,
+			lineToX: 246,
+			lineToY: 346,
+		},
 		cycleDays: 21,
 		drugKeys: ["cisplatin", "bleomycin"],
 		drugs: [
@@ -377,6 +475,10 @@ var REGIMEN_PRESETS = {
 			"Bleomycin pulmonary toxicity is cumulative and dose-limiting in this regimen.",
 			"Etoposide (not modeled) would add an intermediate-clearance drug to the profile.",
 		],
+		caseGoals: [
+			"Drive a fast response without triggering red pulmonary toxicity.",
+			"Preserve kidney function while keeping survival intact.",
+		],
 		warning: "Illustrative BEP timing only. The values are generalized for teaching trends.",
 	},
 	cmf: {
@@ -384,6 +486,25 @@ var REGIMEN_PRESETS = {
 		name: "CMF",
 		subtitle: "Breast cancer teaching preset",
 		indication: "Breast cancer teaching preset",
+		efficacyWeight: 0.88,
+		acuteToxicityWeight: 0.96,
+		cumulativeToxicityWeight: 1.22,
+		recoveryPenalty: 1.12,
+		volatility: 0.86,
+		therapeuticWindow: {
+			ineffectiveMax: 1.3,
+			toxicMin: 9.5,
+		},
+		tumorSite: {
+			key: "breast",
+			label: "Breast mass",
+			cx: 228,
+			cy: 182,
+			labelX: 300,
+			labelY: 146,
+			lineToX: 270,
+			lineToY: 172,
+		},
 		cycleDays: 28,
 		drugKeys: ["cyclophosphamide", "methotrexate", "fluorouracil"],
 		drugs: [
@@ -399,6 +520,10 @@ var REGIMEN_PRESETS = {
 			"Three drugs with different half-lives create a staggered clearance pattern.",
 			"Cyclophosphamide is a prodrug activated by hepatic enzymes, so liver concentration is clinically important.",
 			"Methotrexate requires monitoring of renal function due to kidney-dependent clearance.",
+		],
+		caseGoals: [
+			"Shrink the tumor while maintaining marrow reserve.",
+			"Avoid cumulative toxicity overwhelming recovery late in the run.",
 		],
 		warning: "Illustrative CMF timing only. The values are generalized for teaching trends.",
 	},
@@ -420,6 +545,7 @@ var CHEMO_CONSTANTS = {
 	visualChannels: CHEMO_VIS_CHANNELS,
 	// organ info for organ guide
 	organInfo: CHEMO_ORGAN_INFO,
+	caseTraits: CHEMO_CASE_TRAITS,
 	// drugs map (same structure as DRUG_DATA, keyed by id)
 	drugs: DRUG_DATA,
 	// regimens array built from REGIMEN_PRESETS
@@ -434,6 +560,9 @@ var CHEMO_CONSTANTS = {
 				subtitle: preset.subtitle,
 				cycleHours: preset.cycleDays * 24,
 				drugIds: preset.drugKeys,
+				tumorSite: preset.tumorSite,
+				therapeuticWindow: preset.therapeuticWindow,
+				caseGoals: preset.caseGoals,
 				teachingNotes: preset.teachingNotes,
 				warning: preset.warning,
 				// dose events generated dynamically in regimen_engine.js

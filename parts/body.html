@@ -68,6 +68,25 @@
 						<input id="activity-slider" type="range" min="0" max="1" step="0.01" value="0.35">
 					</div>
 				</div>
+				<div class="section-label">Scenario Layer</div>
+				<div class="scenario-controls">
+					<div class="control-group">
+						<label for="randomness-mode-select">Randomness</label>
+						<select id="randomness-mode-select" class="select-input">
+							<option value="deterministic">Deterministic</option>
+							<option value="clinical" selected>Clinical variability</option>
+							<option value="chaotic">Chaotic</option>
+						</select>
+					</div>
+					<label class="checkbox-control" for="case-mode-toggle">
+						<input id="case-mode-toggle" type="checkbox" checked>
+						<span>Case Mode</span>
+					</label>
+					<div class="reveal-trait-wrap">
+						<button id="reveal-trait-button" class="action-button" type="button">Reveal Mystery Trait</button>
+						<div id="reveal-trait-status" class="reveal-trait-status">Mystery trait hidden</div>
+					</div>
+				</div>
 			</div>
 		</div>
 		<div class="playback-bar">
@@ -120,6 +139,22 @@
 				<p class="model-note">
 					These are simulated symptom states, rolled each timestep from exposure and patient condition.
 				</p>
+			</div>
+			<div class="panel scenario-panel">
+				<div class="scenario-grid">
+					<div class="scenario-card">
+						<h2>Case Mode</h2>
+						<div id="case-summary-root"></div>
+					</div>
+					<div class="scenario-card">
+						<h2>Run Summary</h2>
+						<div id="run-summary-root"></div>
+					</div>
+					<div class="scenario-card event-card">
+						<h2>Event Log</h2>
+						<div id="event-log-root"></div>
+					</div>
+				</div>
 			</div>
 		</div>
 		<div class="visual-side-column">

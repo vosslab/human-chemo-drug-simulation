@@ -120,6 +120,23 @@ function chemoInitBindCustomDosing() {
 		chemoStateSetTumorSensitivity(parseFloat(event.target.value));
 		chemoUiRenderAll();
 	});
+
+	document.getElementById("randomness-mode-select").addEventListener("change", function(event) {
+		chemoStateStopPlayback();
+		chemoStateSetRandomnessMode(event.target.value);
+		chemoUiRenderAll();
+	});
+
+	document.getElementById("case-mode-toggle").addEventListener("change", function(event) {
+		chemoStateStopPlayback();
+		chemoStateSetCaseModeEnabled(!!event.target.checked);
+		chemoUiRenderAll();
+	});
+
+	document.getElementById("reveal-trait-button").addEventListener("click", function() {
+		chemoStateRevealMysteryTrait();
+		chemoUiRenderAll();
+	});
 }
 
 // ============================================

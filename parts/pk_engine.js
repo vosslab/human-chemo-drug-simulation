@@ -12,8 +12,35 @@ function chemoPkClamp(value, minimum, maximum) {
 }
 
 // ============================================
+// Map randomness mode to simulation noise intensity
+function chemoPkGetRandomnessScale(config) {
+	var mode = config.randomnessMode || "clinical";
+	if (mode === "deterministic") {
+		return 0;
+	}
+	if (mode === "chaotic") {
+		return 1.8;
+	}
+	return 1;
+}
+
+// ============================================
+// Normalize regimen-level efficacy and toxicity modifiers
+function chemoPkGetRegimenProfile(config) {
+	var regimen = chemoRegimenGetById(config.regimenId);
+	return {
+		efficacyWeight: regimen.efficacyWeight || 1,
+		acuteToxicityWeight: regimen.acuteToxicityWeight || 1,
+		cumulativeToxicityWeight: regimen.cumulativeToxicityWeight || 1,
+		recoveryPenalty: regimen.recoveryPenalty || 1,
+		volatility: regimen.volatility || 1,
+	};
+}
+
+// ============================================
 // Derive body size and physiologic modifiers from patient-factor sliders
 function chemoPkBuildPatientProfile(state) {
+	var caseProfile = state.caseProfile || null;
 	var genderBalance = typeof state.genderBalance === "number" ? state.genderBalance : 0;
 	var bmi = typeof state.bmi === "number" ? state.bmi : 24;
 	var ageYears = typeof state.ageYears === "number" ? state.ageYears : 52;
@@ -31,6 +58,10 @@ function chemoPkBuildPatientProfile(state) {
 		+ (activityLevel - 0.35) * 0.45
 		- ((ageYears - 50) / 40) * 0.18
 		- ((bmi - 24) / 20) * 0.10;
+	if (caseProfile) {
+		clearanceMultiplier *= caseProfile.clearanceMultiplier || 1;
+		resilienceMultiplier *= caseProfile.resilienceMultiplier || 1;
+	}
 	return {
 		genderBalance: genderBalance,
 		heightCm: heightCm,
@@ -39,6 +70,9 @@ function chemoPkBuildPatientProfile(state) {
 		ageYears: ageYears,
 		bmi: bmi,
 		activityLevel: activityLevel,
+		renalReserve: caseProfile ? caseProfile.renalReserve : 1,
+		hepaticReserve: caseProfile ? caseProfile.hepaticReserve : 1,
+		marrowReserve: caseProfile ? caseProfile.marrowReserve : 1,
 		clearanceMultiplier: chemoPkClamp(clearanceMultiplier, 0.65, 1.35),
 		resilienceMultiplier: chemoPkClamp(resilienceMultiplier, 0.60, 1.40),
 	};
@@ -101,12 +135,122 @@ function chemoPkBuildAdverseEffectSeverity(score) {
 
 // ============================================
 // Convert an adverse-effect score into a realized symptom probability
-function chemoPkBuildAdverseEffectProbability(score, wasPresent) {
+function chemoPkBuildAdverseEffectProbability(score, wasPresent, randomnessScale) {
 	var probability = chemoPkClamp(score * 0.45, 0.01, 0.98);
 	if (wasPresent) {
 		probability = Math.max(probability, chemoPkClamp(0.35 + (score * 0.22), 0.20, 0.98));
 	}
+	if (typeof randomnessScale === "number" && randomnessScale === 0) {
+		if (score >= 1.2) {
+			return 1;
+		}
+		if (score <= 0.55) {
+			return 0;
+		}
+		return chemoPkClamp((score - 0.55) / 0.65, 0, 1);
+	}
 	return probability;
+}
+
+// ============================================
+// Evaluate therapeutic window status from total burden
+function chemoPkBuildTherapeuticWindowStatus(totalBurden, config) {
+	var regimen = chemoRegimenGetById(config.regimenId);
+	var windowSpec = regimen.therapeuticWindow || { ineffectiveMax: 1.5, toxicMin: 12 };
+	if (totalBurden < windowSpec.ineffectiveMax) {
+		return "ineffective";
+	}
+	if (totalBurden >= windowSpec.toxicMin) {
+		return "toxic";
+	}
+	return "optimal";
+}
+
+// ============================================
+// Build event log entries for a timestep transition
+function chemoPkBuildStepEvents(previousSample, currentSample) {
+	var entries = [];
+	var dayText = "Day " + Math.floor(currentSample.timeHour / 24);
+	if (currentSample.therapeuticWindowStatus === "optimal" && (!previousSample || previousSample.therapeuticWindowStatus !== "optimal")) {
+		entries.push(dayText + ": exposure entered the therapeutic window.");
+	}
+	if (currentSample.therapeuticWindowStatus === "toxic" && (!previousSample || previousSample.therapeuticWindowStatus !== "toxic")) {
+		entries.push(dayText + ": exposure crossed into the toxic range.");
+	}
+	if (previousSample && previousSample.tumorVolume >= 0.5 && currentSample.tumorVolume < 0.5) {
+		entries.push(dayText + ": tumor burden dropped below 50% of baseline.");
+	}
+	if (previousSample && previousSample.patientHealth >= 60 && currentSample.patientHealth < 60) {
+		entries.push(dayText + ": patient vitality fell below 60%.");
+	}
+	if (previousSample) {
+		var effectIndex;
+		var previousEffects = {};
+		for (effectIndex = 0; effectIndex < previousSample.adverseEffects.length; effectIndex += 1) {
+			previousEffects[previousSample.adverseEffects[effectIndex].key] = previousSample.adverseEffects[effectIndex];
+		}
+		for (effectIndex = 0; effectIndex < currentSample.adverseEffects.length; effectIndex += 1) {
+			var effect = currentSample.adverseEffects[effectIndex];
+			var priorEffect = previousEffects[effect.key];
+			if (effect.present && (!priorEffect || !priorEffect.present)) {
+				entries.push(dayText + ": " + effect.label.toLowerCase() + " started.");
+			}
+			if (effect.severity === "red" && (!priorEffect || priorEffect.severity !== "red")) {
+				entries.push(dayText + ": " + effect.label.toLowerCase() + " became severe.");
+			}
+		}
+	}
+	if (currentSample.lifeStatus === "Deceased" && (!previousSample || previousSample.lifeStatus !== "Deceased")) {
+		entries.push(dayText + ": patient died.");
+	}
+	return entries;
+}
+
+// ============================================
+// Build an end-of-run scorecard and grade
+function chemoPkBuildRunSummary(samples, config) {
+	var firstSample = samples[0];
+	var lastSample = samples[samples.length - 1];
+	var peakExposure = chemoPkFindPeakExposure(samples);
+	var minTumor = chemoPkFindMinimumTumorVolume(samples);
+	var tumorReduction = chemoPkClamp((1 - (minTumor / Math.max(firstSample.tumorVolume, 0.01))) * 100, 0, 100);
+	var toxicityBurden = chemoPkClamp(100 - (peakExposure * 3.2), 0, 100);
+	var survivalScore = lastSample.lifeStatus === "Deceased" ? 0 : chemoPkClamp(lastSample.patientHealth, 0, 100);
+	var responseTimeIndex = 0;
+	var sampleIndex;
+	for (sampleIndex = 0; sampleIndex < samples.length; sampleIndex += 1) {
+		if (samples[sampleIndex].tumorVolume <= 0.5) {
+			responseTimeIndex = sampleIndex;
+			break;
+		}
+	}
+	var responseTimeHours = samples[Math.min(responseTimeIndex, samples.length - 1)].timeHour;
+	var speedScore = responseTimeHours > 0 ? chemoPkClamp(100 - (responseTimeHours / 6), 0, 100) : 25;
+	var overTreatmentPenalty = chemoPkClamp(Math.max(0, peakExposure - 14) * 4, 0, 100);
+	var totalScore = ((tumorReduction * 0.30) + (toxicityBurden * 0.20) + (survivalScore * 0.25)
+		+ (speedScore * 0.15) + ((100 - overTreatmentPenalty) * 0.10));
+	var grade = "C";
+	if (totalScore >= 90) {
+		grade = "A";
+	} else if (totalScore >= 80) {
+		grade = "B";
+	} else if (totalScore >= 70) {
+		grade = "C";
+	} else if (totalScore >= 60) {
+		grade = "D";
+	} else {
+		grade = "F";
+	}
+	return {
+		grade: grade,
+		totalScore: Math.round(totalScore),
+		tumorReduction: Math.round(tumorReduction),
+		toxicityBurden: Math.round(toxicityBurden),
+		survival: Math.round(survivalScore),
+		speed: Math.round(speedScore),
+		overTreatmentPenalty: Math.round(overTreatmentPenalty),
+		mysteryTraitLabel: config.caseProfile ? config.caseProfile.mysteryTraitLabel : "",
+	};
 }
 
 // ============================================
@@ -114,6 +258,9 @@ function chemoPkBuildAdverseEffectProbability(score, wasPresent) {
 function chemoPkBuildAdverseEffects(regimenDrugs, concentrationMap, totalBurden, visualState, cumulativeExposureMap, patientHealth, config, previousEffectStateMap) {
 	var effectMap = {};
 	var priorStateMap = previousEffectStateMap || {};
+	var regimenProfile = config.regimenProfile || chemoPkGetRegimenProfile(config);
+	var patientProfile = config.patientProfile || {};
+	var randomnessScale = chemoPkGetRandomnessScale(config);
 	var drugIndex;
 	for (drugIndex = 0; drugIndex < regimenDrugs.length; drugIndex += 1) {
 		var drug = regimenDrugs[drugIndex];
@@ -142,6 +289,20 @@ function chemoPkBuildAdverseEffects(regimenDrugs, concentrationMap, totalBurden,
 				visualState,
 				patientHealth
 			);
+			if (effect.rule === "acute" || effect.rule === "fatigue") {
+				effectScore *= regimenProfile.acuteToxicityWeight;
+			} else {
+				effectScore *= regimenProfile.cumulativeToxicityWeight;
+			}
+			if (effect.rule === "renal") {
+				effectScore *= 1 / Math.max(patientProfile.renalReserve || 1, 0.55);
+			}
+			if (effect.rule === "marrow") {
+				effectScore *= 1 / Math.max(patientProfile.marrowReserve || 1, 0.55);
+			}
+			if (effect.rule === "pulmonary") {
+				effectScore *= 1 / Math.max(patientProfile.hepaticReserve || 1, 0.65);
+			}
 			if (effectScore > effectMap[effect.key].score) {
 				effectMap[effect.key].score = effectScore;
 				effectMap[effect.key].severity = chemoPkBuildAdverseEffectSeverity(effectScore);
@@ -165,8 +326,8 @@ function chemoPkBuildAdverseEffects(regimenDrugs, concentrationMap, totalBurden,
 	for (drugIndex = 0; drugIndex < effectKeys.length; drugIndex += 1) {
 		var effectKey = effectKeys[drugIndex];
 		var previousState = priorStateMap[effectKey] || {};
-		var probability = chemoPkBuildAdverseEffectProbability(effectMap[effectKey].score, previousState.present);
-		var isPresent = chemoPkRandom() < probability;
+		var probability = chemoPkBuildAdverseEffectProbability(effectMap[effectKey].score, previousState.present, randomnessScale);
+		var isPresent = randomnessScale === 0 ? probability >= 0.5 : chemoPkRandom() < probability;
 		var realizedSeverity = "green";
 		if (isPresent) {
 			realizedSeverity = effectMap[effectKey].score >= 1.2 ? "red" : "yellow";
@@ -290,10 +451,15 @@ function chemoPkOrganConcentrations(drug, plasmaConc) {
 // Build simulation config from current state
 function chemoPkBuildSimulationConfig(state) {
 	var patientProfile = chemoPkBuildPatientProfile(state);
+	var regimenProfile = chemoPkGetRegimenProfile(state);
+	var doseCount = state.doseCount || chemoRegimenGetDefaultDoseCount(state.regimenId);
+	var doseIntervalDays = state.doseIntervalDays || chemoRegimenGetDefaultDoseIntervalDays(state.regimenId);
+	var lastDoseHour = Math.max(0, (doseCount - 1) * doseIntervalDays * 24);
+	var durationHours = Math.max(CHEMO_CONSTANTS.defaultDurationHours, lastDoseHour + 240);
 	return {
 		regimenId: state.regimenId,
 		timeStepHours: CHEMO_CONSTANTS.timeStepHours,
-		durationHours: CHEMO_CONSTANTS.defaultDurationHours,
+		durationHours: durationHours,
 		bodyScale: state.bodyScale,
 		tumorSensitivity: state.tumorSensitivity,
 		playbackSpeed: state.playbackSpeed,
@@ -301,14 +467,17 @@ function chemoPkBuildSimulationConfig(state) {
 		bsa: patientProfile.bsa,
 		weightKg: patientProfile.weightKg,
 		patientProfile: patientProfile,
+		regimenProfile: regimenProfile,
 		ageYears: patientProfile.ageYears,
 		bmi: patientProfile.bmi,
 		activityLevel: patientProfile.activityLevel,
 		clearanceMultiplier: patientProfile.clearanceMultiplier,
 		resilienceMultiplier: patientProfile.resilienceMultiplier,
+		randomnessMode: state.randomnessMode || "clinical",
+		caseProfile: state.caseProfile || null,
 		doseMultiplier: state.doseMultiplier || 1.0,
-		doseCount: state.doseCount || chemoRegimenGetDefaultDoseCount(state.regimenId),
-		doseIntervalDays: state.doseIntervalDays || chemoRegimenGetDefaultDoseIntervalDays(state.regimenId),
+		doseCount: doseCount,
+		doseIntervalDays: doseIntervalDays,
 	};
 }
 
@@ -345,37 +514,41 @@ function chemoPkBuildDoseMap(doseEvents, durationHours, timeStepHours) {
 // Compute tumor response probability from total burden
 // Uses logistic function; center and spread tuned for exponential decay PK scale
 function chemoPkComputeResponseProbability(totalBurden, config) {
-	var scaledBurden = totalBurden * config.tumorSensitivity * (1.15 / config.bodyScale);
+	var regimenProfile = config.regimenProfile || chemoPkGetRegimenProfile(config);
+	var caseProfile = config.caseProfile || null;
+	var efficacyMultiplier = caseProfile && caseProfile.efficacyMultiplier ? caseProfile.efficacyMultiplier : 1;
+	var scaledBurden = totalBurden * config.tumorSensitivity * efficacyMultiplier * regimenProfile.efficacyWeight * (1.15 / config.bodyScale);
 	// logistic center tuned for typical ABVD burden range
 	// at burden=2 response ~50%, at burden=10 response ~90%
 	var logisticCenter = 2;
 	var logisticSpread = 2.5;
 	var baseline = 1 / (1 + Math.exp(-(scaledBurden - logisticCenter) / logisticSpread));
 	// light pedagogic noise in tumor response only
-	var jitter = (chemoPkRandom() - 0.5) * 0.18;
+	var jitter = (chemoPkRandom() - 0.5) * 0.18 * regimenProfile.volatility * chemoPkGetRandomnessScale(config);
 	return chemoPkClamp(baseline + jitter, 0.03, 0.97);
 }
 
 // ============================================
 // Update tumor volume based on response probability
-function chemoPkUpdateTumorVolume(currentTumorVolume, responseProbability, totalBurden) {
+function chemoPkUpdateTumorVolume(currentTumorVolume, responseProbability, totalBurden, config) {
 	var tumorVolume = currentTumorVolume;
+	var randomnessScale = chemoPkGetRandomnessScale(config || {});
 	if (tumorVolume <= 0.005) {
 		return 0;
 	}
-	var roll = chemoPkRandom();
+	var roll = randomnessScale === 0 ? (responseProbability > 0.5 ? 0 : 1) : chemoPkRandom();
 	if (roll < responseProbability) {
 		// tumor shrinks: rate proportional to response probability
-		var killFraction = 0.010 + responseProbability * 0.035 + chemoPkRandom() * 0.015;
+		var killFraction = 0.010 + responseProbability * 0.035 + (chemoPkRandom() * 0.015 * Math.max(randomnessScale, 0.2));
 		killFraction += Math.min(0.30, totalBurden * 0.0045);
 		tumorVolume *= 1 - Math.min(0.92, killFraction);
 	} else {
 		// tumor grows very slowly when treatment is ineffective
-		tumorVolume *= 1 + (0.001 + chemoPkRandom() * 0.003);
+		tumorVolume *= 1 + (0.001 + (chemoPkRandom() * 0.003 * Math.max(randomnessScale, 0.2)));
 	}
 	// minimal regrowth when no drug exposure
 	if (totalBurden < 0.5) {
-		tumorVolume *= 1 + (0.001 + chemoPkRandom() * 0.002);
+		tumorVolume *= 1 + (0.001 + (chemoPkRandom() * 0.002 * Math.max(randomnessScale, 0.2)));
 	}
 	if (tumorVolume < 0.02 && responseProbability > 0.85 && totalBurden > 8) {
 		return 0;
@@ -424,23 +597,34 @@ function chemoPkBuildVisualState(regimenDrugs, concentrationMap, totalBurden, co
 // ============================================
 // Update patient health based on organ burden
 // Deterministic toxicity model (no random shock for reproducibility)
-function chemoPkUpdatePatientState(currentHealth, totalBurden, visualState, config) {
+function chemoPkUpdatePatientState(currentHealth, totalBurden, visualState, config, rollingToxicityLoad) {
 	var resilienceMultiplier = config.resilienceMultiplier || 1;
+	var regimenProfile = config.regimenProfile || chemoPkGetRegimenProfile(config);
+	var patientProfile = config.patientProfile || {};
+	var renalReserve = patientProfile.renalReserve || 1;
+	var hepaticReserve = patientProfile.hepaticReserve || 1;
+	var marrowReserve = patientProfile.marrowReserve || 1;
+	var toxicityMemory = typeof rollingToxicityLoad === "number" ? rollingToxicityLoad : totalBurden;
 	// base toxicity proportional to drug burden
-	var toxicity = totalBurden * 0.04 / resilienceMultiplier;
+	var toxicity = totalBurden * 0.04 * regimenProfile.acuteToxicityWeight / resilienceMultiplier;
 	// organ stress from liver and kidney processing
-	var organStress = (visualState.liver + visualState.kidney + visualState.bloodstream) * (0.8 / resilienceMultiplier);
+	var organStress = (visualState.liver + visualState.kidney + visualState.bloodstream)
+		* (0.8 * regimenProfile.cumulativeToxicityWeight / resilienceMultiplier);
+	organStress += (((visualState.kidney / Math.max(renalReserve, 0.4)) - visualState.kidney)
+		+ ((visualState.liver / Math.max(hepaticReserve, 0.4)) - visualState.liver)) * 0.5;
+	toxicity += Math.max(0, toxicityMemory - totalBurden) * 0.012 * regimenProfile.cumulativeToxicityWeight;
+	toxicity += Math.max(0, (1 - marrowReserve)) * 1.4;
 	// natural recovery (drops sharply when burden is high)
-	var recovery = Math.max(0.2, (1.2 - (totalBurden * 0.02)) * resilienceMultiplier);
+	var recovery = Math.max(0.1, (1.2 - (toxicityMemory * 0.02)) * resilienceMultiplier / (regimenProfile.recoveryPenalty * (1 + (1 - marrowReserve) * 0.6)));
 	// escalating toxicity at high burdens: narrow therapeutic window
 	if (totalBurden > 15) {
-		toxicity += (totalBurden - 15) * 0.05 / resilienceMultiplier;
+		toxicity += (totalBurden - 15) * 0.05 * regimenProfile.acuteToxicityWeight / resilienceMultiplier;
 	}
 	if (totalBurden > 40) {
-		toxicity += (totalBurden - 40) * 0.15 / resilienceMultiplier;
+		toxicity += (totalBurden - 40) * 0.15 * regimenProfile.cumulativeToxicityWeight / resilienceMultiplier;
 	}
 	if (totalBurden > 80) {
-		toxicity += (totalBurden - 80) * 0.4 / resilienceMultiplier;
+		toxicity += (totalBurden - 80) * 0.4 * regimenProfile.cumulativeToxicityWeight / resilienceMultiplier;
 	}
 	var health = currentHealth - toxicity - organStress + recovery;
 	return chemoPkClamp(health, 0, 100);
@@ -469,12 +653,15 @@ function chemoPkBuildLifeStatus(patientHealth) {
 // This is the main simulation function: pre-computes the full sample array
 function chemoPkBuildSamples(config) {
 	var patientProfile = config.patientProfile || chemoPkBuildPatientProfile(config);
+	var regimenProfile = config.regimenProfile || chemoPkGetRegimenProfile(config);
 	config.patientProfile = patientProfile;
+	config.regimenProfile = regimenProfile;
 	config.bsa = patientProfile.bsa;
 	config.weightKg = patientProfile.weightKg;
 	config.clearanceMultiplier = patientProfile.clearanceMultiplier;
 	config.resilienceMultiplier = patientProfile.resilienceMultiplier;
 	var regimen = chemoRegimenGetById(config.regimenId);
+	var randomnessScale = chemoPkGetRandomnessScale(config);
 	var doseEvents = chemoRegimenBuildDoseEvents(
 		config.regimenId, config.bsa,
 		config.doseMultiplier, config.doseCount, config.doseIntervalDays
@@ -506,6 +693,8 @@ function chemoPkBuildSamples(config) {
 	var samples = [];
 	var cumulativeExposureMap = {};
 	var effectStateMap = {};
+	var eventLog = [];
+	var rollingToxicityLoad = 0;
 	for (drugIndex = 0; drugIndex < regimenDrugs.length; drugIndex += 1) {
 		cumulativeExposureMap[regimenDrugs[drugIndex].id] = 0;
 	}
@@ -526,11 +715,17 @@ function chemoPkBuildSamples(config) {
 		// build visual state and tumor/health response
 		var visualState = chemoPkBuildVisualState(regimenDrugs, concentrationMap, totalBurden, config, tumorVolume);
 		var responseProbability = chemoPkComputeResponseProbability(totalBurden, config);
-		tumorVolume = chemoPkUpdateTumorVolume(tumorVolume, responseProbability, totalBurden);
+		if (randomnessScale === 0) {
+			responseProbability = chemoPkClamp((responseProbability - 0.5) * 0.8 + 0.5, 0.03, 0.97);
+		}
+		tumorVolume = chemoPkUpdateTumorVolume(tumorVolume, responseProbability, totalBurden, config);
 		// rebuild visual state with updated tumor volume
 		visualState = chemoPkBuildVisualState(regimenDrugs, concentrationMap, totalBurden, config, tumorVolume);
-		patientHealth = chemoPkUpdatePatientState(patientHealth, totalBurden, visualState, config);
+		rollingToxicityLoad = (rollingToxicityLoad * 0.7) + (totalBurden * 0.3);
+		patientHealth = chemoPkUpdatePatientState(patientHealth, totalBurden, visualState, config, rollingToxicityLoad);
 		var lifeStatus = chemoPkBuildLifeStatus(patientHealth);
+		var therapeuticWindowStatus = chemoPkBuildTherapeuticWindowStatus(totalBurden, config);
+		var previousSample = samples.length ? samples[samples.length - 1] : null;
 		var adverseEffectResult = chemoPkBuildAdverseEffects(
 			regimenDrugs,
 			concentrationMap,
@@ -543,7 +738,7 @@ function chemoPkBuildSamples(config) {
 		);
 		var adverseEffects = adverseEffectResult.effects;
 		effectStateMap = adverseEffectResult.effectStateMap;
-		samples.push({
+		var sample = {
 			timeHour: timeHour,
 			drugConcentrations: concentrationMap,
 			totalBurden: totalBurden,
@@ -552,10 +747,19 @@ function chemoPkBuildSamples(config) {
 			patientHealth: patientHealth,
 			lifeStatus: lifeStatus,
 			patientProfile: config.patientProfile,
+			therapeuticWindowStatus: therapeuticWindowStatus,
 			adverseEffects: adverseEffects,
 			visualState: visualState,
+			rollingToxicityLoad: rollingToxicityLoad,
 			regimenName: regimen.name,
-		});
+		};
+		var newEvents = chemoPkBuildStepEvents(previousSample, sample);
+		var eventIndex;
+		for (eventIndex = 0; eventIndex < newEvents.length; eventIndex += 1) {
+			eventLog.push(newEvents[eventIndex]);
+		}
+		sample.eventLog = eventLog.slice();
+		samples.push(sample);
 		// stop simulation if patient dies
 		if (lifeStatus === "Deceased") {
 			break;

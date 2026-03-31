@@ -13,26 +13,66 @@ var CHEMO_STATE = {
 	bmi: 24,
 	ageYears: 52,
 	activityLevel: 0.35,
+	randomnessMode: "clinical",
+	caseModeEnabled: true,
+	caseProfile: null,
 	// simulation data
 	samples: [],
 	currentSampleIndex: 0,
 	peakExposure: 0,
 	minimumTumorVolume: 1,
+	runSummary: null,
 	playbackTimerId: null,
 };
 
+function chemoStateChooseCaseGoal(regimenId) {
+	var regimen = chemoRegimenGetById(regimenId);
+	var goals = regimen.caseGoals || ["Keep the patient alive while shrinking the tumor."];
+	return goals[Math.floor(Math.random() * goals.length)];
+}
+
+function chemoStateChooseCaseTrait() {
+	var traits = CHEMO_CONSTANTS.caseTraits || [];
+	return traits[Math.floor(Math.random() * traits.length)];
+}
+
+function chemoStateGenerateCaseProfile(regimenId) {
+	var trait = chemoStateChooseCaseTrait();
+	return {
+		goal: chemoStateChooseCaseGoal(regimenId),
+		mysteryTraitKey: trait.key,
+		mysteryTraitLabel: trait.label,
+		mysteryTraitDescription: trait.description,
+		revealed: false,
+		renalReserve: trait.renalReserve || (0.82 + (Math.random() * 0.35)),
+		hepaticReserve: trait.hepaticReserve || (0.85 + (Math.random() * 0.30)),
+		marrowReserve: trait.marrowReserve || (0.80 + (Math.random() * 0.35)),
+		clearanceMultiplier: trait.clearanceMultiplier || 1,
+		resilienceMultiplier: trait.resilienceMultiplier || 1,
+		efficacyMultiplier: trait.efficacyMultiplier || 1,
+	};
+}
+
 function chemoStateRebuildSimulation() {
+	if (CHEMO_STATE.caseModeEnabled && !CHEMO_STATE.caseProfile) {
+		CHEMO_STATE.caseProfile = chemoStateGenerateCaseProfile(CHEMO_STATE.regimenId);
+	}
+	if (!CHEMO_STATE.caseModeEnabled) {
+		CHEMO_STATE.caseProfile = null;
+	}
 	var config = chemoPkBuildSimulationConfig(CHEMO_STATE);
 	CHEMO_STATE.samples = chemoPkBuildSamples(config);
 	CHEMO_STATE.currentSampleIndex = Math.min(CHEMO_STATE.currentSampleIndex, CHEMO_STATE.samples.length - 1);
 	CHEMO_STATE.peakExposure = chemoPkFindPeakExposure(CHEMO_STATE.samples);
 	CHEMO_STATE.minimumTumorVolume = chemoPkFindMinimumTumorVolume(CHEMO_STATE.samples);
+	CHEMO_STATE.runSummary = chemoPkBuildRunSummary(CHEMO_STATE.samples, config);
 }
 
 function chemoStateSetRegimen(regimenId) {
 	CHEMO_STATE.regimenId = regimenId;
 	CHEMO_STATE.doseCount = chemoRegimenGetDefaultDoseCount(regimenId);
 	CHEMO_STATE.doseIntervalDays = chemoRegimenGetDefaultDoseIntervalDays(regimenId);
+	CHEMO_STATE.caseProfile = CHEMO_STATE.caseModeEnabled ? chemoStateGenerateCaseProfile(regimenId) : null;
 	CHEMO_STATE.currentSampleIndex = 0;
 	CHEMO_STATE.simulationRunId += 1;
 	chemoStateRebuildSimulation();
@@ -98,6 +138,27 @@ function chemoStateSetActivityLevel(value) {
 	chemoStateRebuildSimulation();
 }
 
+function chemoStateSetRandomnessMode(mode) {
+	CHEMO_STATE.randomnessMode = mode;
+	CHEMO_STATE.currentSampleIndex = 0;
+	CHEMO_STATE.simulationRunId += 1;
+	chemoStateRebuildSimulation();
+}
+
+function chemoStateSetCaseModeEnabled(enabled) {
+	CHEMO_STATE.caseModeEnabled = enabled;
+	CHEMO_STATE.caseProfile = enabled ? chemoStateGenerateCaseProfile(CHEMO_STATE.regimenId) : null;
+	CHEMO_STATE.currentSampleIndex = 0;
+	CHEMO_STATE.simulationRunId += 1;
+	chemoStateRebuildSimulation();
+}
+
+function chemoStateRevealMysteryTrait() {
+	if (CHEMO_STATE.caseProfile) {
+		CHEMO_STATE.caseProfile.revealed = true;
+	}
+}
+
 function chemoStateGetCurrentSample() {
 	if (!CHEMO_STATE.samples.length) {
 		return null;
@@ -113,6 +174,7 @@ function chemoStateAdvanceSample(stepCount) {
 function chemoStateRerollSimulation() {
 	CHEMO_STATE.currentSampleIndex = 0;
 	CHEMO_STATE.simulationRunId += 1;
+	CHEMO_STATE.caseProfile = CHEMO_STATE.caseModeEnabled ? chemoStateGenerateCaseProfile(CHEMO_STATE.regimenId) : null;
 	chemoStateRebuildSimulation();
 }
 
