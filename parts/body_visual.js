@@ -59,7 +59,7 @@ function chemoVisualGetTumorMetrics(sample) {
 	return {
 		responseChance: responseChance,
 		tumorShrinkFraction: tumorShrinkFraction,
-		tumorRadius: Math.max(26, Math.min(92, tumorRadius)),
+		tumorRadius: Math.max(0, Math.min(92, tumorRadius)),
 	};
 }
 
@@ -71,7 +71,7 @@ function chemoVisualRenderBody() {
 	var statusRoot = document.getElementById("body-status-root");
 	var tumorRadius = tumorMetrics.tumorRadius.toFixed(1);
 	var tumorGlowRadius = (tumorMetrics.tumorRadius + 16).toFixed(1);
-	var tumorCoreRadius = Math.max(18, tumorMetrics.tumorRadius * 0.72).toFixed(1);
+	var tumorCoreRadius = Math.max(0, tumorMetrics.tumorRadius * 0.72).toFixed(1);
 	var patientHealth = typeof currentSample.patientHealth === "number" ? currentSample.patientHealth : 100;
 	var lifeStatus = currentSample.lifeStatus || "Stable";
 	var bodyOpacity = Math.max(0.18, patientHealth / 100);
@@ -86,9 +86,9 @@ function chemoVisualRenderBody() {
 		"<ellipse cx='145' cy='214' rx='34' ry='24' fill='" + chemoVisualColor("liver", visualState.liver) + "' stroke='rgba(221,139,61,0.55)' />" +
 		"<ellipse cx='138' cy='274' rx='20' ry='34' fill='" + chemoVisualColor("kidney", visualState.kidney) + "' stroke='rgba(74,125,178,0.55)' />" +
 		"<ellipse cx='222' cy='274' rx='20' ry='34' fill='" + chemoVisualColor("kidney", visualState.kidney) + "' stroke='rgba(74,125,178,0.55)' />" +
-		"<circle cx='226' cy='208' r='" + tumorGlowRadius + "' fill='rgba(126,91,214,0.12)' />" +
-		"<circle cx='226' cy='208' r='" + tumorRadius + "' fill='" + chemoVisualColor("tumor", visualState.tumor) + "' stroke='rgba(126,91,214,0.78)' stroke-width='3' />" +
-		"<circle cx='236' cy='196' r='" + tumorCoreRadius + "' fill='rgba(255,255,255,0.12)' />" +
+		(tumorMetrics.tumorRadius > 0 ? "<circle cx='226' cy='208' r='" + tumorGlowRadius + "' fill='rgba(126,91,214,0.12)' />" : "") +
+		(tumorMetrics.tumorRadius > 0 ? "<circle cx='226' cy='208' r='" + tumorRadius + "' fill='" + chemoVisualColor("tumor", visualState.tumor) + "' stroke='rgba(126,91,214,0.78)' stroke-width='3' />" : "") +
+		(tumorMetrics.tumorRadius > 0 ? "<circle cx='236' cy='196' r='" + tumorCoreRadius + "' fill='rgba(255,255,255,0.12)' />" : "") +
 		"<path d='M162 182 C170 214, 160 246, 150 266' fill='none' stroke='" + chemoVisualColor("clearance", visualState.clearance) + "' stroke-width='7' stroke-linecap='round' />" +
 		"<path d='M200 182 C210 216, 220 240, 228 266' fill='none' stroke='" + chemoVisualColor("clearance", visualState.clearance) + "' stroke-width='7' stroke-linecap='round' />" +
 		"<g fill='none' stroke='#5b6a73' stroke-width='1.6'>" +
@@ -127,7 +127,7 @@ function chemoVisualRenderBody() {
 		"<div class='status-pill'><span>Liver load</span><strong>" + chemoVisualPercentText(visualState.liver) + "</strong></div>" +
 		"<div class='status-pill'><span>Kidney clearance</span><strong>" + chemoVisualPercentText(visualState.kidney) + "</strong></div>" +
 		"<div class='status-pill'><span>Tumor exposure</span><strong>" + chemoVisualPercentText(visualState.tumor) + "</strong></div>" +
-		"<div class='status-pill'><span>Tumor size</span><strong>" + Math.round((currentSample.tumorVolume || (tumorMetrics.tumorRadius / 92)) * 100) + "%</strong></div>" +
+		"<div class='status-pill'><span>Tumor size</span><strong>" + Math.round(((typeof currentSample.tumorVolume === "number" ? currentSample.tumorVolume : (tumorMetrics.tumorRadius / 92))) * 100) + "%</strong></div>" +
 		"<div class='status-pill'><span>Response chance</span><strong>" + chemoVisualPercentText(tumorMetrics.responseChance) + "</strong></div>" +
 		"<div class='status-pill'><span>Tumor shrinkage</span><strong>" + chemoVisualPercentText(tumorMetrics.tumorShrinkFraction) + "</strong></div>" +
 		"<div class='status-pill'><span>Patient vitality</span><strong>" + Math.round(patientHealth) + "%</strong></div>" +

@@ -79,6 +79,11 @@ var DRUG_DATA = {
 		color: "#FF6B35",
 		// body affinity ratios for visual rendering
 		bodyAffinity: { bloodstream: 1.25, liver: 0.55, kidney: 0.5, tumor: 1.2 },
+		adverseEffects: [
+			{ key: "mucositis", label: "Mucositis", rule: "mucositis" },
+			{ key: "diarrhea", label: "Diarrhea", rule: "acute" },
+			{ key: "myelosuppression", label: "Myelosuppression", rule: "marrow" },
+		],
 		infusionHours: 46,
 		description: "Antimetabolite that inhibits thymidylate synthase. "
 			+ "Very short plasma half-life (14 min) due to rapid hepatic metabolism.",
@@ -97,6 +102,11 @@ var DRUG_DATA = {
 		excretionOrgan: "bile",
 		color: "#D62828",
 		bodyAffinity: { bloodstream: 1.2, liver: 0.9, kidney: 0.4, tumor: 1.0 },
+		adverseEffects: [
+			{ key: "nausea", label: "Nausea and vomiting", rule: "acute" },
+			{ key: "myelosuppression", label: "Myelosuppression", rule: "marrow" },
+			{ key: "cardiotoxicity", label: "Cardiotoxicity", rule: "cardiac" },
+		],
 		infusionHours: 1,
 		description: "Anthracycline that intercalates DNA. "
 			+ "Biphasic elimination: rapid distribution (5 min) then slow terminal (30 hr). "
@@ -116,6 +126,11 @@ var DRUG_DATA = {
 		excretionOrgan: "kidney",
 		color: "#1B9AAA",
 		bodyAffinity: { bloodstream: 1.0, liver: 0.5, kidney: 1.1, tumor: 0.9 },
+		adverseEffects: [
+			{ key: "nausea", label: "Nausea and vomiting", rule: "acute" },
+			{ key: "kidney_injury", label: "Kidney injury", rule: "renal" },
+			{ key: "neuropathy", label: "Peripheral neuropathy", rule: "neuro" },
+		],
 		infusionHours: 2,
 		description: "Platinum-based alkylating agent that crosslinks DNA. "
 			+ "Free drug clears in ~25 min, protein-bound platinum persists for days.",
@@ -134,6 +149,11 @@ var DRUG_DATA = {
 		excretionOrgan: "kidney",
 		color: "#6A4C93",
 		bodyAffinity: { bloodstream: 0.9, liver: 0.5, kidney: 1.2, tumor: 0.85 },
+		adverseEffects: [
+			{ key: "mucositis", label: "Mucositis", rule: "mucositis" },
+			{ key: "kidney_injury", label: "Kidney injury", rule: "renal" },
+			{ key: "myelosuppression", label: "Myelosuppression", rule: "marrow" },
+		],
 		infusionHours: 0.5,
 		description: "Antifolate that inhibits DHFR. "
 			+ "Primarily eliminated unchanged by kidneys (80-90% in 24 hr).",
@@ -152,6 +172,11 @@ var DRUG_DATA = {
 		excretionOrgan: "kidney",
 		color: "#E07A5F",
 		bodyAffinity: { bloodstream: 1.0, liver: 1.1, kidney: 0.6, tumor: 0.9 },
+		adverseEffects: [
+			{ key: "nausea", label: "Nausea and vomiting", rule: "acute" },
+			{ key: "myelosuppression", label: "Myelosuppression", rule: "marrow" },
+			{ key: "hemorrhagic_cystitis", label: "Hemorrhagic cystitis", rule: "renal" },
+		],
 		infusionHours: 1,
 		description: "Nitrogen mustard prodrug activated by hepatic P450. "
 			+ "Half-life ~6 hours.",
@@ -170,6 +195,11 @@ var DRUG_DATA = {
 		excretionOrgan: "kidney",
 		color: "#2B7A78",
 		bodyAffinity: { bloodstream: 1.0, liver: 0.5, kidney: 1.1, tumor: 0.8 },
+		adverseEffects: [
+			{ key: "pulmonary_toxicity", label: "Pulmonary toxicity", rule: "pulmonary" },
+			{ key: "fever", label: "Fever", rule: "acute" },
+			{ key: "skin_reaction", label: "Skin reaction", rule: "cumulative" },
+		],
 		infusionHours: 0.75,
 		description: "Glycopeptide antibiotic causing DNA strand breaks. "
 			+ "Half-life ~2 hours. Cumulative pulmonary toxicity is dose-limiting.",
@@ -188,6 +218,11 @@ var DRUG_DATA = {
 		excretionOrgan: "bile",
 		color: "#8A5CF5",
 		bodyAffinity: { bloodstream: 0.9, liver: 0.6, kidney: 0.4, tumor: 1.15 },
+		adverseEffects: [
+			{ key: "neuropathy", label: "Peripheral neuropathy", rule: "neuro" },
+			{ key: "constipation", label: "Constipation", rule: "cumulative" },
+			{ key: "myelosuppression", label: "Myelosuppression", rule: "marrow" },
+		],
 		infusionHours: 0.5,
 		description: "Vinca alkaloid that inhibits microtubule assembly. "
 			+ "Half-life ~24 hours. Hepatic metabolism, biliary excretion.",
@@ -206,6 +241,11 @@ var DRUG_DATA = {
 		excretionOrgan: "kidney",
 		color: "#EF8D32",
 		bodyAffinity: { bloodstream: 1.1, liver: 0.8, kidney: 0.9, tumor: 0.7 },
+		adverseEffects: [
+			{ key: "nausea", label: "Nausea and vomiting", rule: "acute" },
+			{ key: "myelosuppression", label: "Myelosuppression", rule: "marrow" },
+			{ key: "fatigue", label: "Fatigue", rule: "fatigue" },
+		],
 		infusionHours: 1.5,
 		description: "Alkylating agent requiring hepatic activation. "
 			+ "Half-life ~5 hours.",
@@ -224,6 +264,11 @@ var DRUG_DATA = {
 		excretionOrgan: "kidney",
 		color: "#3566C6",
 		bodyAffinity: { bloodstream: 1.0, liver: 0.7, kidney: 0.8, tumor: 0.95 },
+		adverseEffects: [
+			{ key: "neuropathy", label: "Peripheral neuropathy", rule: "neuro" },
+			{ key: "nausea", label: "Nausea and vomiting", rule: "acute" },
+			{ key: "kidney_injury", label: "Kidney injury", rule: "renal" },
+		],
 		infusionHours: 2,
 		description: "Platinum-based alkylating agent. "
 			+ "Biphasic: rapid initial phase (15 min), prolonged terminal (18 hr).",
@@ -242,6 +287,10 @@ var DRUG_DATA = {
 		excretionOrgan: "kidney",
 		color: "#5BA36E",
 		bodyAffinity: { bloodstream: 0.85, liver: 0.6, kidney: 0.7, tumor: 0.6 },
+		adverseEffects: [
+			{ key: "fatigue", label: "Fatigue", rule: "fatigue" },
+			{ key: "nausea", label: "Nausea and vomiting", rule: "acute" },
+		],
 		infusionHours: 2,
 		description: "Reduced folate that enhances 5-FU efficacy. "
 			+ "Half-life ~6 hours. Primarily renally excreted.",

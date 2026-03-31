@@ -3,6 +3,15 @@
 ### Fixes and Maintenance
 
 - Cleaned up README.md: removed internal plan link, tightened doc descriptions.
+- Updated the chemotherapy web simulation to support dose-interval control, log-scaled concentration plotting, day/hour timeline labels with day tick marks, visible dose markers, and true tumor eradication instead of a hard minimum tumor floor.
+- Added a simplified adverse-effects panel that lists major side effects for the active regimen drugs and flags whether the simulated patient is currently experiencing them.
+- Added a separate outcomes plot for tumor size and patient vitality over time so treatment response and toxicity trends can be read independently from the concentration chart.
+- Replaced cycle-based scheduling controls with a continuous dose-count model so `Dose interval` now means one full regimen administration every N days for the chosen number of doses.
+- Removed the manual single-dose controls and custom-dose plumbing to keep the regimen scheduling UI simpler and less confusing.
+- Added patient-factor sliders for gender, BMI, age, and lifestyle, with derived weight/BSA plus clearance and resilience modifiers that alter exposure and toxicity behavior in the simulation.
+- Reworked the adverse-effects display into separate green, yellow, and red panels, with each major side effect categorized by current severity instead of only present versus absent.
+- Strengthened the concentration-chart death indicator with a prominent red post-death overlay and banner so fatal toxicity is visually obvious even when death occurs near the right edge of the timeline.
+- Changed adverse effects from deterministic risk projection to realized simulated symptoms, using random rolls each timestep so effects like fever or nausea can actually be present, absent, or severe in the current patient state.
 
 ## 2026-03-27
 

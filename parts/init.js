@@ -64,27 +64,53 @@ function chemoInitBindControls() {
 }
 
 // ============================================
-// Bind protocol adjustment and custom dosing controls
+// Bind protocol adjustment controls
 function chemoInitBindCustomDosing() {
 	// dose multiplier slider: scales all regimen doses
 	document.getElementById("dose-multiplier-slider").addEventListener("input", function(event) {
 		chemoStateStopPlayback();
 		CHEMO_STATE.doseMultiplier = parseFloat(event.target.value);
-		document.getElementById("dose-multiplier-value").textContent = CHEMO_STATE.doseMultiplier.toFixed(2) + "x";
 		CHEMO_STATE.currentSampleIndex = 0;
 		CHEMO_STATE.simulationRunId += 1;
 		chemoStateRebuildSimulation();
 		chemoUiRenderAll();
 	});
 
-	// cycle count slider: repeats the full dose schedule
-	document.getElementById("cycle-count-slider").addEventListener("input", function(event) {
+	// dose count slider: schedules repeated regimen administrations
+	document.getElementById("dose-count-slider").addEventListener("input", function(event) {
 		chemoStateStopPlayback();
-		CHEMO_STATE.cycleCount = parseInt(event.target.value, 10);
-		document.getElementById("cycle-count-value").textContent = CHEMO_STATE.cycleCount;
-		CHEMO_STATE.currentSampleIndex = 0;
-		CHEMO_STATE.simulationRunId += 1;
-		chemoStateRebuildSimulation();
+		chemoStateSetDoseCount(parseInt(event.target.value, 10));
+		chemoUiRenderAll();
+	});
+
+	// dose interval slider: changes spacing between regimen treatment days
+	document.getElementById("dose-interval-slider").addEventListener("input", function(event) {
+		chemoStateStopPlayback();
+		chemoStateSetDoseIntervalDays(parseFloat(event.target.value));
+		chemoUiRenderAll();
+	});
+
+	document.getElementById("gender-slider").addEventListener("input", function(event) {
+		chemoStateStopPlayback();
+		chemoStateSetGenderBalance(parseFloat(event.target.value));
+		chemoUiRenderAll();
+	});
+
+	document.getElementById("bmi-slider").addEventListener("input", function(event) {
+		chemoStateStopPlayback();
+		chemoStateSetBmi(parseFloat(event.target.value));
+		chemoUiRenderAll();
+	});
+
+	document.getElementById("age-slider").addEventListener("input", function(event) {
+		chemoStateStopPlayback();
+		chemoStateSetAgeYears(parseFloat(event.target.value));
+		chemoUiRenderAll();
+	});
+
+	document.getElementById("activity-slider").addEventListener("input", function(event) {
+		chemoStateStopPlayback();
+		chemoStateSetActivityLevel(parseFloat(event.target.value));
 		chemoUiRenderAll();
 	});
 
@@ -92,38 +118,6 @@ function chemoInitBindCustomDosing() {
 	document.getElementById("tumor-sensitivity-slider").addEventListener("input", function(event) {
 		chemoStateStopPlayback();
 		chemoStateSetTumorSensitivity(parseFloat(event.target.value));
-		chemoUiRenderAll();
-	});
-
-	// manual drug selector
-	document.getElementById("manual-drug-select").addEventListener("change", function(event) {
-		chemoStateSetManualDrugId(event.target.value);
-		chemoUiRenderSliderLabels();
-	});
-
-	// manual dose time slider
-	document.getElementById("manual-dose-time-slider").addEventListener("input", function(event) {
-		chemoStateSetManualDoseTimeHour(parseFloat(event.target.value));
-		chemoUiRenderSliderLabels();
-	});
-
-	// manual dose amount slider
-	document.getElementById("manual-dose-amount-slider").addEventListener("input", function(event) {
-		chemoStateSetManualDoseAmountMg(parseFloat(event.target.value));
-		chemoUiRenderSliderLabels();
-	});
-
-	// add dose button
-	document.getElementById("add-dose-button").addEventListener("click", function() {
-		chemoStateStopPlayback();
-		chemoStateAddCustomDose();
-		chemoUiRenderAll();
-	});
-
-	// clear doses button
-	document.getElementById("clear-doses-button").addEventListener("click", function() {
-		chemoStateStopPlayback();
-		chemoStateClearCustomDoses();
 		chemoUiRenderAll();
 	});
 }

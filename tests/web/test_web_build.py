@@ -38,6 +38,7 @@ def test_web_build_contains_expected_sections():
 	assert "preset-button-grid" in html
 	# visualization areas
 	assert "chart-root" in html
+	assert "outcome-chart-root" in html
 	assert "body-visual-root" in html
 	# stats strip
 	assert "metric-total-burden" in html
@@ -47,11 +48,19 @@ def test_web_build_contains_expected_sections():
 	# playback controls
 	assert "play-button" in html
 	assert "time-scrubber" in html
-	# custom dosing section
+	# dosing controls
 	assert "Adjust Protocol" in html
-	assert "manual-drug-select" in html
+	assert "dose-count-slider" in html
+	assert "dose-interval-slider" in html
+	assert "gender-slider" in html
+	assert "bmi-slider" in html
+	assert "age-slider" in html
+	assert "activity-slider" in html
 	# teaching notes
 	assert "teaching-notes-list" in html
+	assert "adverse-effects-green" in html
+	assert "adverse-effects-yellow" in html
+	assert "adverse-effects-red" in html
 	# body visualization elements
 	assert any(token in html for token in ["Bloodstream", "Kidneys", "Tumor"])
 	# health bar
@@ -93,7 +102,9 @@ const fs = require("fs");
 const vm = require("vm");
 const path = require("path");
 const repoRoot = process.cwd();
-const context = { console: console, Math: Math };
+const mathProxy = Object.create(Math);
+mathProxy.random = function() { return 0.0; };
+const context = { console: console, Math: mathProxy };
 vm.createContext(context);
 for (const relPath of [
 	"parts/constants.js",
@@ -111,26 +122,42 @@ const config = {
 	tumorSensitivity: 1,
 	playbackSpeed: 1,
 	simulationRunId: 3,
-	customDoseEvents: [],
-	bsa: 1.7,
-	weightKg: 70,
+	genderBalance: 0,
+	bmi: 24,
+	ageYears: 52,
+	activityLevel: 0.35,
 };
 const samples = context.chemoPkBuildSamples(config);
 // validate one-compartment at t=0 for bleomycin
 const bleo = context.DRUG_DATA.bleomycin;
 const testConc = context.chemoPkOneCompartment(bleo, 100, 0, 70);
 const expectedConc = 100 / (bleo.vdLPerKg * 70);
-console.log(JSON.stringify({
-	count: samples.length,
-	firstTotalBurden: samples[0].totalBurden,
+	console.log(JSON.stringify({
+		count: samples.length,
+		firstTotalBurden: samples[0].totalBurden,
 	firstTumorVolume: samples[0].tumorVolume,
 	lastTumorVolume: samples[samples.length - 1].tumorVolume,
+		firstVitality: samples[0].patientHealth,
+		lastVitality: samples[samples.length - 1].patientHealth,
+		profileWeight: samples[0].patientProfile.weightKg,
+		profileBsa: samples[0].patientProfile.bsa,
+		profileClearance: samples[0].patientProfile.clearanceMultiplier,
 	firstResponseProbability: samples[0].responseProbability,
-	lastVisualRadius: samples[samples.length - 1].visualState.tumorRadius,
-	lastShrink: samples[samples.length - 1].visualState.tumorShrinkFraction,
-	firstHealth: samples[0].patientHealth,
-	concentrationCheck: Math.abs(testConc - expectedConc) < 0.0001,
-	noNaN: !samples.some(function(s) { return isNaN(s.totalBurden) || isNaN(s.patientHealth); }),
+		lastVisualRadius: samples[samples.length - 1].visualState.tumorRadius,
+		lastShrink: samples[samples.length - 1].visualState.tumorShrinkFraction,
+		firstEffectCount: samples[0].adverseEffects.length,
+		hasSeverityBands: samples[0].adverseEffects.every(function(effect) {
+			return ["green", "yellow", "red"].includes(effect.severity);
+		}),
+		presentEffectsSeen: samples.some(function(s) {
+			return s.adverseEffects.some(function(effect) { return effect.present; });
+		}),
+		presentFlagExists: samples[0].adverseEffects.every(function(effect) {
+			return typeof effect.present === "boolean";
+		}),
+		firstHealth: samples[0].patientHealth,
+		concentrationCheck: Math.abs(testConc - expectedConc) < 0.0001,
+		noNaN: !samples.some(function(s) { return isNaN(s.totalBurden) || isNaN(s.patientHealth); }),
 }));
 """
 	result = subprocess.run(
@@ -150,11 +177,85 @@ console.log(JSON.stringify({
 	assert 0 < data["firstResponseProbability"] < 1
 	assert data["lastVisualRadius"] > 0
 	assert 0 <= data["lastShrink"] <= 1
+	assert data["firstEffectCount"] > 0
+	assert data["hasSeverityBands"] is True
+	assert data["presentEffectsSeen"] is True
+	assert data["presentFlagExists"] is True
 	# tumor volume changes over time
 	assert data["firstTumorVolume"] != data["lastTumorVolume"]
+	assert data["firstVitality"] != data["lastVitality"]
+	assert data["profileWeight"] > 40
+	assert data["profileBsa"] > 1.2
+	assert 0.6 <= data["profileClearance"] <= 1.35
 	# one-compartment math is exact at t=0
 	assert data["concentrationCheck"] is True
 	# no NaN values
 	assert data["noNaN"] is True
 	# health starts near 100 (may dip slightly from first timestep toxicity)
 	assert data["firstHealth"] > 95
+
+
+#============================================
+def test_pk_engine_supports_dose_interval_and_tumor_eradication():
+	"""
+	Verify the regimen interval override changes event spacing and that tumor volume
+	can reach zero under aggressive dosing instead of being clamped above zero.
+	"""
+	script = """
+const fs = require("fs");
+const vm = require("vm");
+const path = require("path");
+const repoRoot = process.cwd();
+const mathProxy = Object.create(Math);
+mathProxy.random = function() { return 0.0; };
+const context = { console: console, Math: mathProxy };
+vm.createContext(context);
+for (const relPath of [
+	"parts/constants.js",
+	"parts/regimen_engine.js",
+	"parts/pk_engine.js"
+]) {
+	const source = fs.readFileSync(path.join(repoRoot, relPath), "utf8");
+	vm.runInContext(source, context, { filename: relPath });
+}
+const intervalDays = context.chemoRegimenBuildDoseDays("abvd", 3, 4);
+	const config = {
+		regimenId: "abvd",
+		timeStepHours: 2,
+		durationHours: 720,
+		bodyScale: 1,
+		tumorSensitivity: 1.5,
+		playbackSpeed: 1,
+		simulationRunId: 99,
+		genderBalance: 0,
+		bmi: 24,
+		ageYears: 52,
+		activityLevel: 0.35,
+		doseMultiplier: 2,
+		doseCount: 4,
+		doseIntervalDays: 7,
+	};
+	const samples = context.chemoPkBuildSamples(config);
+	const minimumTumor = context.chemoPkFindMinimumTumorVolume(samples);
+	console.log(JSON.stringify({
+		intervalDays: intervalDays,
+		minimumTumor: minimumTumor,
+		lastTumor: samples[samples.length - 1].tumorVolume,
+		lastStatus: samples[samples.length - 1].lifeStatus,
+		peakExposure: context.chemoPkFindPeakExposure(samples),
+	}));
+"""
+	result = subprocess.run(
+		["node", "-e", script],
+		cwd=REPO_ROOT,
+		check=False,
+		capture_output=True,
+		text=True,
+	)
+	assert result.returncode == 0, result.stderr
+	data = json.loads(result.stdout)
+	assert data["intervalDays"] == [0, 3, 6, 9]
+	assert data["peakExposure"] > 0
+	assert data["minimumTumor"] == 0
+	assert data["lastTumor"] == 0
+	assert data["lastStatus"] != "Deceased"

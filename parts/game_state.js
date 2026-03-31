@@ -6,15 +6,13 @@ var CHEMO_STATE = {
 	simulationRunId: 1,
 	// protocol modifiers
 	doseMultiplier: 1.0,
-	cycleCount: 1,
-	// configurable patient parameters
-	bsa: SIM_DEFAULTS.patientBSA,
-	weightKg: SIM_DEFAULTS.patientWeightKg,
-	// manual dose controls
-	manualDrugId: "doxorubicin",
-	manualDoseTimeHour: 24,
-	manualDoseAmountMg: 120,
-	customDoseEvents: [],
+	doseCount: chemoRegimenGetDefaultDoseCount(REGIMEN_KEYS[0]),
+	doseIntervalDays: chemoRegimenGetDefaultDoseIntervalDays(REGIMEN_KEYS[0]),
+	// patient factors
+	genderBalance: 0,
+	bmi: 24,
+	ageYears: 52,
+	activityLevel: 0.35,
 	// simulation data
 	samples: [],
 	currentSampleIndex: 0,
@@ -33,6 +31,8 @@ function chemoStateRebuildSimulation() {
 
 function chemoStateSetRegimen(regimenId) {
 	CHEMO_STATE.regimenId = regimenId;
+	CHEMO_STATE.doseCount = chemoRegimenGetDefaultDoseCount(regimenId);
+	CHEMO_STATE.doseIntervalDays = chemoRegimenGetDefaultDoseIntervalDays(regimenId);
 	CHEMO_STATE.currentSampleIndex = 0;
 	CHEMO_STATE.simulationRunId += 1;
 	chemoStateRebuildSimulation();
@@ -56,36 +56,43 @@ function chemoStateSetPlaybackSpeed(value) {
 	CHEMO_STATE.playbackSpeed = value;
 }
 
-function chemoStateSetManualDrugId(drugId) {
-	CHEMO_STATE.manualDrugId = drugId;
-}
-
-function chemoStateSetManualDoseTimeHour(value) {
-	CHEMO_STATE.manualDoseTimeHour = value;
-}
-
-function chemoStateSetManualDoseAmountMg(value) {
-	CHEMO_STATE.manualDoseAmountMg = value;
-}
-
-function chemoStateAddCustomDose() {
-	var drug = CHEMO_CONSTANTS.drugs[CHEMO_STATE.manualDrugId];
-	var customId = "custom-" + CHEMO_STATE.simulationRunId + "-" + (CHEMO_STATE.customDoseEvents.length + 1);
-	CHEMO_STATE.customDoseEvents.push({
-		id: customId,
-		drugId: drug.id,
-		label: "Custom " + drug.name + " at " + CHEMO_STATE.manualDoseTimeHour + " h",
-		startHour: CHEMO_STATE.manualDoseTimeHour,
-		durationHours: drug.infusionHours,
-		amountMg: CHEMO_STATE.manualDoseAmountMg,
-	});
+function chemoStateSetDoseIntervalDays(value) {
+	CHEMO_STATE.doseIntervalDays = value;
 	CHEMO_STATE.currentSampleIndex = 0;
 	CHEMO_STATE.simulationRunId += 1;
 	chemoStateRebuildSimulation();
 }
 
-function chemoStateClearCustomDoses() {
-	CHEMO_STATE.customDoseEvents = [];
+function chemoStateSetDoseCount(value) {
+	CHEMO_STATE.doseCount = value;
+	CHEMO_STATE.currentSampleIndex = 0;
+	CHEMO_STATE.simulationRunId += 1;
+	chemoStateRebuildSimulation();
+}
+
+function chemoStateSetGenderBalance(value) {
+	CHEMO_STATE.genderBalance = value;
+	CHEMO_STATE.currentSampleIndex = 0;
+	CHEMO_STATE.simulationRunId += 1;
+	chemoStateRebuildSimulation();
+}
+
+function chemoStateSetBmi(value) {
+	CHEMO_STATE.bmi = value;
+	CHEMO_STATE.currentSampleIndex = 0;
+	CHEMO_STATE.simulationRunId += 1;
+	chemoStateRebuildSimulation();
+}
+
+function chemoStateSetAgeYears(value) {
+	CHEMO_STATE.ageYears = value;
+	CHEMO_STATE.currentSampleIndex = 0;
+	CHEMO_STATE.simulationRunId += 1;
+	chemoStateRebuildSimulation();
+}
+
+function chemoStateSetActivityLevel(value) {
+	CHEMO_STATE.activityLevel = value;
 	CHEMO_STATE.currentSampleIndex = 0;
 	CHEMO_STATE.simulationRunId += 1;
 	chemoStateRebuildSimulation();
