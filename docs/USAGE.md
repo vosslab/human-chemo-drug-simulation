@@ -1,109 +1,88 @@
-# USAGE.md
+# Usage
 
-How to run the tools in this repository.
+`human-chemo-drug-simulation` is a browser-based teaching demo of chemotherapy drug
+pharmacokinetics. Users build the app into one self-contained HTML file, open it in a
+browser, pick a regimen preset (or set manual dosing), and watch drug concentration,
+tumor volume, and patient vitality play out over a 30-day simulated window.
 
-## reset_repo.py
+## Quick start
 
-`reset_repo.py` is the bootstrap entry point for a new consumer repo cloned from this
-template. It runs an interactive interview (project type, code license, docs license,
-PyPI intent, stage, commit), writes the `REPO_TYPE` marker, installs license files,
-seeds `pyproject.toml` when PyPI is requested, runs propagation, and removes
-template-meta paths.
-
-### Normal use (interactive)
+Build the single-file app and open it in a browser:
 
 ```bash
-source source_me.sh && python3 reset_repo.py
+bash build_app.sh
+open chemotherapy_body_simulation.html
 ```
 
-The script interviews you in your terminal. No flags are required for normal use.
+`build_app.sh` concatenates `parts/head.html`, `parts/style.css`, `parts/body.html`,
+and the `parts/*.js` modules (in dependency order: `constants.js`, `regimen_engine.js`,
+`pk_engine.js`, `game_state.js`, `chart_stage.js`, `body_visual.js`, `ui_rendering.js`,
+`init.js`) plus `parts/tail.html` into `chemotherapy_body_simulation.html` at the repo
+root. Because the output is one self-contained file, opening it directly (`file://`)
+works with no local server.
 
-### CLI flags
+## Source layout
 
-| Flag | Description |
+There is no CLI; the app is driven entirely through the browser UI once built. Source
+modules live under `parts/`:
+
+| File | Role |
 | --- | --- |
-| `--config <file>` | Supply interview answers from a JSON file (testing/reproducibility mode) |
-| `--dry-run` | Log planned actions without writing any files |
-| `-h` | Show help and exit |
+| `parts/constants.js` | drug and regimen constant data |
+| `parts/regimen_engine.js` | regimen preset and dose-schedule logic |
+| `parts/pk_engine.js` | one-compartment pharmacokinetic model and response/toxicity math |
+| `parts/game_state.js` | simulation state, case-mode, and run-summary tracking |
+| `parts/chart_stage.js` | concentration/outcome chart rendering |
+| `parts/body_visual.js` | body diagram visualization |
+| `parts/ui_rendering.js` | control-panel and stats-strip rendering |
+| `parts/init.js` | app bootstrap and event wiring |
 
-### Config mode (testing/reproducibility interface)
+Edit the relevant `parts/*.js` (or `parts/*.html`, `parts/style.css`) file, then rerun
+`bash build_app.sh` to regenerate `chemotherapy_body_simulation.html`.
 
-`--config` is intended for automated testing and reproducible resets, not for
-routine human use. Pass a JSON file with the interview answers:
+## Examples
 
-```bash
-source source_me.sh && python3 reset_repo.py --config my_config.json
-```
-
-Config mode is non-interactive: the script reads answers from the file and proceeds
-without prompting. This replaces the interactive interview for the run.
-
-#### JSON schema
-
-| Key | Required | Values | Notes |
-| --- | --- | --- | --- |
-| `project_type` | YES | `python` / `p`, `typescript` / `t`, `rust` / `r`, `other` / `o` | Short alias or full token |
-| `code_license` | YES | SPDX identifier or alias (e.g. `MIT`, `m`, `GPL-3.0`, `g`) | Resolved via `resolve_license` |
-| `docs_license` | no | SPDX identifier or alias | Default: `CC-BY-4.0` |
-| `pypi` | no | `true` / `false` | Default: `false`; Python-only |
-| `stage` | no | `true` / `false` | Default: `true` |
-| `commit` | no | `true` / `false` | Default: `false` |
-
-#### Minimal example
-
-```json
-{
-  "project_type": "python",
-  "code_license": "GPL-3.0"
-}
-```
-
-#### Full example
-
-```json
-{
-  "project_type": "typescript",
-  "code_license": "MIT",
-  "docs_license": "CC-BY-4.0",
-  "stage": false,
-  "commit": false
-}
-```
-
-### Folder-name guard
-
-The script refuses to run when the repo root directory is named exactly
-`starter-repo-template`. This protects the template development checkout from
-accidental destruction.
-
-If you see this error, clone or rename the repo to your project name first:
-
-```
-This repo is named starter-repo-template. Clone or rename it to the consumer project name before running reset.
-```
-
-The guard checks the folder name only; it does not inspect remotes or origin URLs.
-
-### Outside a git repo
-
-Running `reset_repo.py` outside a git repository exits with a clear message
-instead of a raw subprocess traceback.
-
-## E2E test harness
-
-For the clone-based reset E2E harness (LOCAL and REMOTE modes), see
-[E2E_TESTS.md](E2E_TESTS.md) and the inline documentation in
-`tests/meta/e2e/e2e_reset_routing.py`. The harness is template-meta:
-it lives under `tests/meta/e2e/` and is removed by reset.
-
-Run all offline E2E tests:
+Rebuild after a source edit and re-open in the browser:
 
 ```bash
-bash tests/meta/e2e/run_all.sh
+bash build_app.sh
+open chemotherapy_body_simulation.html
 ```
 
-Run a single E2E test:
+Run the fast pytest suite (repo-wide lint/style checks plus the Python-level web build
+test):
 
 ```bash
-source source_me.sh && python3 tests/meta/e2e/e2e_reset_routing.py
+source source_me.sh && python3 -m pytest tests/ -q
 ```
+
+Run just the web build check, which builds the app and asserts on the generated HTML:
+
+```bash
+source source_me.sh && python3 -m pytest tests/web/test_web_build.py -q
+```
+
+Run the standalone Node.js PK-engine calibration script directly (loads `parts/constants.js`,
+`parts/regimen_engine.js`, `parts/pk_engine.js` into a `vm` context and checks the math):
+
+```bash
+node tests/web/test_pk_calibration.js
+```
+
+## Inputs and outputs
+
+- Inputs: the `parts/*.js` and `parts/*.html`/`parts/style.css` source files.
+- Output: `chemotherapy_body_simulation.html` at the repo root, a single self-contained
+  HTML file with inlined CSS and JS. Open it directly in any browser; no server or
+  network access is required to run the simulation.
+
+## Known gaps
+
+- [ ] `npm run build` (`build_github_pages.sh`) and `npm run serve` (`run_web_server.sh`)
+  are off-template TypeScript-build paths that currently fail (no `src/main.ts`); see
+  [INSTALL.md](INSTALL.md#known-gaps). Use `bash build_app.sh` as documented above instead.
+- [ ] Playwright browser E2E tests (`run_playwright_tests.sh`, `npm run test:playwright`)
+  require a `playwright.config.ts` that is not present yet; see
+  [PLAYWRIGHT_USAGE.md](PLAYWRIGHT_USAGE.md) for the intended usage once configured.
+- [ ] Confirm whether `chemotherapy_body_simulation.html` is meant to be committed to
+  git or is purely a local/CI build artifact (repo history shows it tracked and modified).

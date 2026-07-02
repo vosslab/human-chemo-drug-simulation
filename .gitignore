@@ -2,7 +2,9 @@ report_*.txt
 .DS_Store
 
 # === UNIVERSAL ===
+output*/
 _temp*.?*
+OTHER_REPOS/
 # === TYPESCRIPT ===
 node_modules/
 dist/

@@ -1,3 +1,117 @@
+## 2026-07-02
+
+### Additions and New Features
+
+- Added `docs/TROUBLESHOOTING.md` (symptoms and fixes for the `TS18003` typecheck
+  failure, the broken `build_github_pages.sh` entry-point error, the repo-root build
+  output path, and Playwright/Python setup) and `docs/ROADMAP.md` (near-term `parts/*.js`
+  to `src/*.ts` migration, build-path reconciliation, and non-goals) during the docset
+  refresh. Fixed a `docs/docs/` double-prefix link and two `..`/untracked-file link
+  issues surfaced by `tests/test_markdown_links.py`.
+- Captured `docs/screenshots/main_view.png` (Playwright, headless Chromium, full-page,
+  1280x900 viewport) of the built `chemotherapy_body_simulation.html` at its default
+  state: regimen presets, adjust-protocol and patient-factor controls, concentration
+  and tumor/vitality timelines, body flow view, adverse effects, run summary, and
+  teaching notes. Filled the `screenshot-docs`-managed block in `README.md` with the
+  real embed line.
+- Added `docs/INSTALL.md` with real requirements, `npm install` / `devel/setup_typescript.sh`
+  / `pip_requirements-dev.txt` install steps, and a `bash build_app.sh` verify-install step.
+  Recorded the `npm run build` / `npm run serve` / `npm run check` / `run_playwright_tests.sh`
+  TypeScript-template gap (missing `src/main.ts` and `playwright.config.ts`, confirmed by
+  running `build_github_pages.sh` directly) as "Known gaps" rather than presenting them as
+  working commands.
+- Added `docs/CODE_ARCHITECTURE.md` and `docs/FILE_STRUCTURE.md`, documenting the
+  `parts/*.js` -> `build_app.sh` -> `chemotherapy_body_simulation.html` pipeline as the
+  real, working build, and recording the `build_github_pages.sh` / `run_web_server.sh` /
+  `check_codebase.sh` / `run_playwright_tests.sh` TypeScript-template gap (missing
+  `src/main.ts` and `playwright.config.ts`) as a known structural issue in the
+  architecture doc's "Known gaps" section rather than papering over it.
+- Added `docs/RELATED_PROJECTS.md`, mapping confirmed upstream/tooling sources
+  (`starter-repo-template`, `claude-code-permissions-hook`) plus same-author sibling
+  teaching simulations and same-domain pharmacokinetics tools found via bounded web
+  discovery (`pksim`, `PK-Visualization`, Maxsim2).
+- Added `devel/clean_build.sh`, the light build cleaner wired to the `npm run clean` target. It
+  wipes build output, tool caches, and test artifacts while keeping `node_modules` (and Rust
+  `target/`) intact, so the next build is ab initio with no reinstall.
+- Updated `devel/dist_clean.sh` (the deep reset) to keep the committed `package-lock.json`, so a
+  distribution-clean checkout still drives a reproducible `npm ci`.
+- Repointed the `clean` npm alias in `package.json` from `./dist_clean.sh` to
+  `./devel/clean_build.sh`.
+
+### Behavior or Interface Changes
+
+- Replaced `docs/USAGE.md`, which had been stale `reset_repo.py` bootstrap-script
+  boilerplate carried over from the starter template, with real usage for this app:
+  `bash build_app.sh` quick start, the `parts/*.js` source-module table, pytest/node
+  test invocation examples, and inputs/outputs. Cross-linked the same known-build-gap
+  notes recorded in `docs/INSTALL.md`.
+- Standardized `README.md` via the `readme-docs` skill: fixed the quick-start build output path
+  from the stale `output/chemotherapy_body_simulation.html` to the actual repo-root
+  `chemotherapy_body_simulation.html` written by `build_app.sh`; rewrote the first paragraph as
+  pure prose (no repo-name code span, under the 250-character About-field limit) to pass
+  `tests/test_readme_first_paragraph.py`; added a Documentation section linking
+  `docs/INSTALL.md`, `docs/USAGE.md`, `docs/CODE_ARCHITECTURE.md`, and `docs/FILE_STRUCTURE.md` by
+  convention (these four are being authored concurrently by other doc skills, so
+  `tests/test_markdown_links.py::test_markdown_links[README.md]` fails until they land); added
+  `run_web_server.sh` as the dev-server quick-start alternative; added a Testing section covering
+  `pytest tests/` and `run_playwright_tests.sh`; inserted the empty
+  `<!-- screenshots:begin/end (managed by screenshot-docs) -->` sentinel block reserved for the
+  `screenshot-docs` skill. No live-demo/GitHub Pages link was added: `deploy-pages.yml` sits
+  untracked at the repo root, not under `.github/workflows/`, so Pages deployment is not yet
+  confirmed active.
+
+### Removals and Deprecations
+
+- Removed the root `dist_clean.sh`; both cleaners now live only under `devel/`
+  (`devel/clean_build.sh` light, `devel/dist_clean.sh` deep).
+
+## 2026-07-01
+
+### Fixes and Maintenance
+
+- Fixed `check_codebase.sh` failing with `TS18003: No inputs were found` on this JS-only
+  repo. Both `tsc` steps (`tsconfig.json`, `tsconfig.lint.json`) now guard on `.ts` file
+  presence via `find` and emit a loud `SKIP` when none exist, matching the existing
+  `test:node` compgen guard and the script's stated honesty principle, instead of failing
+  the gate. Root cause: `REPO_TYPE=typescript` scaffold, but all source is plain `.js` under
+  `parts/`.
+- Configured `eslint.config.local.js` (the consumer-owned overrides file) for the JS
+  concatenation model, clearing 262 false-positive lint errors. `parts/**/*.js` get browser
+  globals plus `no-undef` and `no-unused-vars` disabled, because those files are non-module
+  browser scripts concatenated in dependency order at build time; ESLint sees each in
+  isolation and cannot resolve the ~100 shared cross-file symbols (`CHEMO_STATE`,
+  `chemoChartRender`, etc.). `tests/web/**/*.js` get CommonJS `sourceType` plus node globals
+  and `no-require-imports` off. Syntax and hygiene rules (`no-var`, `prefer-const`, `eqeqeq`)
+  stay active.
+- Removed 4 genuine dead-code lint findings surfaced once the config was fixed: dead
+  initializers `percentValue = 0` (`parts/chart_stage.js`) and `grade = "C"`
+  (`parts/pk_engine.js`) that every branch reassigns; a discarded first `visualState` build
+  in `parts/pk_engine.js` computed with the pre-update tumor volume and overwritten before
+  any read; and a redeclared `var eventIndex` in the same function scope. Behavior preserved
+  (the 210+ PK tests in `tests/web/test_web_build.py` pass).
+- Added missing `-> None` return annotations to 7 test functions in
+  `tests/web/test_web_build.py` to satisfy `tests/test_function_typing.py`.
+- Reformatted 9 files with `prettier --write` after the prettier 3.9.4 floor bump. The fleet-wide
+  prettier floor bump changed formatting output such that these previously-clean files failed
+  `prettier --check`. Ran `npx prettier --write '**/*.{ts,tsx,mts,cts,js,mjs,cjs}'` to conform to
+  the canonical `.prettierrc`; whitespace-only, no logic change.
+- Added the canonical `allowScripts` allow-list (esbuild + fsevents install scripts) to `package.json` to silence `npm warn allow-scripts` and match the template.
+- Added root `dist_clean.sh` (modeled on the sports-life-game reference script: `rm -rf
+  dist _site *.tsbuildinfo .eslintcache`, rooted via `git rev-parse --show-toplevel`) so
+  the `npm run clean` alias in `package.json` resolves to a real script instead of a
+  missing file.
+- Replaced the `__REPO_NAME__` / `__REPO_VERSION__` placeholders in `package.json` with
+  `human-chemo-drug-simulation` and `0.0.0`.
+
+### Decisions and Failures
+
+- `./check_codebase.sh` fails at the typecheck step with `TS18003: No inputs were found
+  in config file`, because this repo predates the TypeScript template: its source lives
+  in plain JavaScript under `parts/*.js`, assembled by `build_app.sh` into a single HTML
+  file, with no `src/*.ts` entry point anywhere in the repo. This is a structural,
+  off-template gap, not a mechanical lint/format issue, so it was left as-is. Migrating
+  `parts/*.js` to `src/*.ts` is deferred to a future TypeScript-migration pass.
+
 ## 2026-03-29
 
 ### Fixes and Maintenance
@@ -74,7 +188,7 @@
 ### Behavior or Interface Changes
 
 - Replaced the template README with project-specific quick-start instructions for building and testing the simulation.
-- Added [docs/USAGE.md](docs/USAGE.md) and [docs/active_plans/CHEMOTHERAPY_BODY_SIMULATION_PLAN.md](docs/active_plans/CHEMOTHERAPY_BODY_SIMULATION_PLAN.md) to document the current app and implementation plan.
+- Added [USAGE.md](USAGE.md) and [active_plans/CHEMOTHERAPY_BODY_SIMULATION_PLAN.md](active_plans/CHEMOTHERAPY_BODY_SIMULATION_PLAN.md) to document the current app and implementation plan.
 - Added direct organ labels to the body diagram so bloodstream, liver, kidneys, and tumor are readable without relying on the status cards.
 - Expanded the body view with a large tumor, stochastic response labels, shrinking tumor readouts, and patient status feedback.
 - Simplified the front-panel controls and extended the default simulation window from 336 hours to 720 hours.

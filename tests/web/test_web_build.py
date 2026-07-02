@@ -8,7 +8,7 @@ OUTPUT_HTML = REPO_ROOT / "chemotherapy_body_simulation.html"
 
 
 #============================================
-def test_web_build_creates_single_file_artifact():
+def test_web_build_creates_single_file_artifact() -> None:
 	"""
 	Build the web app and verify the output artifact exists.
 	"""
@@ -24,7 +24,7 @@ def test_web_build_creates_single_file_artifact():
 
 
 #============================================
-def test_web_build_contains_expected_sections():
+def test_web_build_contains_expected_sections() -> None:
 	"""
 	Check that the built page includes core simulation regions.
 	"""
@@ -77,7 +77,7 @@ def test_web_build_contains_expected_sections():
 
 
 #============================================
-def test_web_source_files_are_present():
+def test_web_source_files_are_present() -> None:
 	"""
 	Ensure the modular source files for the app exist.
 	"""
@@ -99,7 +99,7 @@ def test_web_source_files_are_present():
 
 
 #============================================
-def test_pk_engine_produces_valid_samples():
+def test_pk_engine_produces_valid_samples() -> None:
 	"""
 	Run the PK engine in Node and verify concentration and tumor response fields.
 	Uses exponential decay model with ABVD regimen.
@@ -207,7 +207,7 @@ console.log(JSON.stringify({
 
 
 #============================================
-def test_pk_engine_supports_dose_interval_and_tumor_eradication():
+def test_pk_engine_supports_dose_interval_and_tumor_eradication() -> None:
 	"""
 	Verify the regimen interval override changes event spacing and that tumor volume
 	can reach zero under aggressive dosing instead of being clamped above zero.
@@ -273,7 +273,7 @@ const intervalDays = context.chemoRegimenBuildDoseDays("abvd", 3, 4);
 
 
 #============================================
-def test_regimen_profiles_change_response_and_toxicity_behavior():
+def test_regimen_profiles_change_response_and_toxicity_behavior() -> None:
 	"""
 	Verify preset-level efficacy and toxicity weights change outcomes for the same burden input.
 	"""
@@ -333,7 +333,7 @@ console.log(JSON.stringify({
 
 
 #============================================
-def test_case_mode_and_run_summary_fields_exist_in_simulation_output():
+def test_case_mode_and_run_summary_fields_exist_in_simulation_output() -> None:
 	"""
 	Verify the PK/game layer exposes case traits, event logging, and end-of-run summary data.
 	"""

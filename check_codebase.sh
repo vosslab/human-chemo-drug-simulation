@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 # check_codebase.sh - run the codebase check gate (no build).
 #
+# Front door: run this directly as ./check_codebase.sh. It is the interface
+# for everyone, no npm knowledge required. The npm run check alias is an
+# optional mirror that points right back at this script.
+#
 # Runs (in order):
 #   1. TypeScript typecheck via tsconfig.json (src/).
 #   2. Wider typecheck via tsconfig.lint.json (tests/, tools/).
@@ -16,12 +20,12 @@
 #
 # Each step invokes its tool directly (npx tsc, npx eslint, npx prettier,
 # node --test). No dependency on package.json scripts; the package.json
-# "check" alias points at this script and stays canonical, but every
-# individual step is owned by the shell script.
+# "check" alias just points back at this script, and every individual step
+# is owned by the shell script.
 #
-# Build is not part of this gate. Run ./build_github_pages.sh (or
-# npm run build) for that. Playwright is not part of this gate either;
-# run npm run test:playwright manually after bash run_web_server.sh.
+# Build is not part of this gate. Run ./build_github_pages.sh for that
+# (npm run build mirrors it). Playwright is not part of this gate either;
+# run ./run_playwright_tests.sh (which handles build + run internally).
 #
 # Flags:
 #   -h, --help          Print usage and exit 0.
@@ -168,8 +172,16 @@ trap print_summary EXIT
 # Steps
 SUMMARY_ENABLED=1
 
-# 1. typecheck (always)
-step_run typecheck npx tsc --noEmit -p tsconfig.json
+# 1. typecheck
+# tsconfig.json includes **/*.ts. `tsc` exits 2 with TS18003 when the include
+# list matches no files (a JS-only consumer of the typescript template). Guard
+# with a .ts presence check and SKIP loudly rather than fail the gate -- same
+# honesty principle as the test:node step below.
+if find . -path ./node_modules -prune -o -name '*.ts' -print 2>/dev/null | grep -q .; then
+	step_run typecheck npx tsc --noEmit -p tsconfig.json
+else
+	step_skip typecheck "no .ts files present"
+fi
 
 # 2. typecheck:lint
 # Wider typecheck covers tests/ and tools/ via tsconfig.lint.json.
@@ -177,9 +189,13 @@ step_run typecheck npx tsc --noEmit -p tsconfig.json
 # consumer has it at bootstrap; no SKIP fallback needed.
 # Note: `tsc -p tsconfig.lint.json` exits 2 with TS18003 if its include list
 # matches no files. A consumer with no tests/*.ts and no tools/*.ts will hit
-# this. Workaround: seed a stub `.ts` in either tree, or extend the include
-# list locally in the consumer-owned tsconfig.lint.json.
-step_run typecheck:lint npx tsc --noEmit -p tsconfig.lint.json
+# this. Guard with a .ts presence check under tests/ and tools/ and SKIP loudly
+# rather than fail, matching the typecheck step above.
+if find tests tools -name '*.ts' 2>/dev/null | grep -q .; then
+	step_run typecheck:lint npx tsc --noEmit -p tsconfig.lint.json
+else
+	step_skip typecheck:lint "no tests/*.ts or tools/*.ts files present"
+fi
 
 # 3. lint
 # Single recursive glob covers every JS/TS extension from cwd: catches src/,
