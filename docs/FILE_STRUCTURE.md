@@ -2,103 +2,98 @@
 
 ## Top-level layout
 
-- [parts/](../parts/): the real application source -- plain JavaScript modules, HTML
-  shell fragments, CSS, and [parts/CONTRACTS.md](../parts/CONTRACTS.md) (the canonical
-  data-model spec). See [docs/CODE_ARCHITECTURE.md](CODE_ARCHITECTURE.md) for how the
-  modules fit together.
-- [chemotherapy_body_simulation.html](../chemotherapy_body_simulation.html): the built,
-  self-contained single-file output of `build_app.sh`. Committed to the repo so the app
-  can be opened directly without a build step.
-- [build_app.sh](../build_app.sh): concatenates `parts/*` into
-  `chemotherapy_body_simulation.html`. The real, working build.
-- [build_github_pages.sh](../build_github_pages.sh): TypeScript/esbuild build targeting
-  `src/main.ts` -> `dist/`. `src/` does not exist in this repo; this script currently
-  aborts. See [docs/CODE_ARCHITECTURE.md](CODE_ARCHITECTURE.md#known-gaps).
-- [run_web_server.sh](../run_web_server.sh): serves `dist/` for local preview; depends
-  on `build_github_pages.sh` succeeding first, so it is currently broken too.
-- [run_playwright_tests.sh](../run_playwright_tests.sh): runs the Playwright browser
-  suite; requires `playwright.config.ts`, which does not exist yet.
-- [check_codebase.sh](../check_codebase.sh): typecheck + lint + format + Node unit-test
-  gate for the TypeScript template layout (`src/`, `tests/*.mjs`). Fails the typecheck
-  step in this repo for the same `src/`-does-not-exist reason.
-- [tests/](../tests/): pytest unit/lint tests, plus `tests/web/` (Node-driven checks of
-  the built app) and `tests/playwright/` (browser E2E, currently just a helper module).
-- [tools/](../tools/): standalone Node scripts, for example
-  [tools/html_to_pdf.mjs](../tools/html_to_pdf.mjs) (renders the built HTML to PDF).
+- [src/](../src/): the application source -- strict TypeScript ES modules plus the host
+  HTML and CSS. See [docs/CODE_ARCHITECTURE.md](CODE_ARCHITECTURE.md) for how the modules
+  fit together.
+- [build_github_pages.sh](../build_github_pages.sh): the single canonical build.
+  Type-checks `src/`, bundles [src/main.ts](../src/main.ts) into `dist/main.js` with
+  esbuild (ESM, minified, sourcemap), copies the HTML and CSS into `dist/`, and writes
+  `dist/.nojekyll`. `dist/` is the GitHub Pages artifact.
+- [run_web_server.sh](../run_web_server.sh): local dev preview. Builds `dist/`, then serves
+  it with `python3 -m http.server` on a random 8xxx port.
+- [check_codebase.sh](../check_codebase.sh): fast, build-free gate -- `tsc` typecheck,
+  wider `tests/`+`tools/` typecheck, ESLint, `prettier --check`, and the Node unit tests.
+- [run_playwright_tests.sh](../run_playwright_tests.sh): runs the Playwright browser suite,
+  building `dist/` first when needed.
+- [playwright.config.ts](../playwright.config.ts): Playwright config; its `webServer` block
+  rebuilds `dist/` and serves it on a random 8xxx port.
+- [tests/](../tests/): pytest lint/hygiene gates, Node `*.mjs` unit tests, `tests/web/`
+  (source-presence check and parity fixture), and `tests/playwright/` (browser smoke).
+- [tools/](../tools/): standalone Node utilities, for example
+  [tools/html_to_pdf.mjs](../tools/html_to_pdf.mjs).
 - [devel/](../devel/): developer-only scripts (changelog rotation, version bump, clean
   build, environment setup). See [devel/DEVEL_README.md](../devel/DEVEL_README.md).
 - [docs/](.): documentation, described below.
 - [package.json](../package.json), [tsconfig.json](../tsconfig.json),
   [tsconfig.lint.json](../tsconfig.lint.json), [eslint.config.js](../eslint.config.js),
-  [eslint.config.local.js](../eslint.config.local.js): TypeScript-template tooling
-  config. `tsconfig.json` includes only `**/*.ts`, so it has no inputs while `src/`
-  is absent.
+  [eslint.config.local.js](../eslint.config.local.js): TypeScript build and lint tooling.
+  The npm scripts (`build`, `serve`, `check`, `clean`) are thin mirrors of the shell
+  scripts above.
 - [pip_requirements.txt](../pip_requirements.txt),
   [pip_requirements-dev.txt](../pip_requirements-dev.txt),
-  [pip_extras.txt](../pip_extras.txt): Python dependency manifests for the pytest
-  tooling used to test and lint this repo.
+  [pip_extras.txt](../pip_extras.txt): Python dependency manifests for the pytest tooling.
 - [Brewfile](../Brewfile): Homebrew package manifest.
 - [source_me.sh](../source_me.sh): shell bootstrap sourced before running Python
-  commands (`source source_me.sh && python3 ...`).
-- [REPO_TYPE](../REPO_TYPE): repo type marker, currently `typescript`.
+  (`source source_me.sh && python3 ...`).
+- [REPO_TYPE](../REPO_TYPE): repo type marker, `typescript`.
 - [VERSION](../VERSION): current repo version string.
 - [LICENSE.CC_BY_4_0](../LICENSE.CC_BY_4_0), [LICENSE.LGPL_v3](../LICENSE.LGPL_v3):
   license texts (docs/creative content vs. code).
-- `deploy-pages.yml`: GitHub Pages deploy workflow definition (not
-  under `.github/workflows/` at the time of this audit -- verify placement before relying
-  on it to deploy automatically).
+- `deploy-pages.yml`: GitHub Pages deploy workflow. It lives at the repo root and is
+  untracked, not under `.github/workflows/`; verify placement before relying on it. See
+  [docs/CODE_ARCHITECTURE.md](CODE_ARCHITECTURE.md#known-gaps).
 
-## Key subtrees
+## The src/ subtree
 
-### parts/
+Modules are listed in dependency order (bottom to top); `main.ts` is the entry point.
 
 ```text
-parts/
-+- CONTRACTS.md        (canonical data-model + event-flow spec)
-+- head.html            (page <head>, opening tags)
-+- body.html            (page body markup, controls, chart/visual containers)
-+- tail.html            (closing tags)
-+- style.css            (all page styling)
-+- constants.js         (DRUG_DATA, REGIMEN_PRESETS)
-+- regimen_engine.js    (mg/m2 -> mg dose event construction)
-+- pk_engine.js          (PK simulation, tumor response, patient health)
-+- game_state.js         (CHEMO_STATE, simulation rebuild orchestration)
-+- chart_stage.js        (concentration/outcome chart rendering)
-+- body_visual.js        (animated body diagram rendering)
-+- ui_rendering.js       (stats strip, teaching notes, event log rendering)
-`- init.js               (DOM wiring, entry point loaded last)
+src/
++- types.ts            (shared type contract; normative form of docs/CONTRACTS.md)
++- constants.ts        (DRUG_DATA, REGIMEN_PRESETS, SIM_DEFAULTS, CHEMO_CONSTANTS)
++- dom.ts              (typed requireElement/requireInput/requireSelect helpers)
++- regimen_engine.ts   (regimen lookup, mg/m2 -> mg dose-event construction)
++- pk_engine.ts        (PK simulation, tumor response, patient health, run summary)
++- game_state.ts       (CHEMO_STATE singleton, actions, rebuild + playback)
++- chart_stage.ts      (SVG concentration and outcome chart rendering)
++- body_visual.ts      (stylized body SVG, health bar, status pill)
++- ui_rendering.ts     (metric chips, controls, teaching notes; calls renderers)
++- main.ts             (bootstrap and DOM event wiring; entry point)
++- index.html          (host page; loads main.js as a module script)
+`- style.css           (all page styling)
 ```
 
-`build_app.sh` concatenates these files in this exact order (head, style, body,
-scripts, tail) to produce `chemotherapy_body_simulation.html`.
-
-### tests/
+## tests/ subtree
 
 ```text
 tests/
 +- test_*.py                    (repo-wide pytest lint/hygiene gates)
++- test_regimen_engine.mjs      (Node unit test; imports src/regimen_engine.ts)
++- test_pk_engine.mjs           (Node unit test; imports src/pk_engine.ts)
++- test_game_state.mjs          (Node unit test; imports src/game_state.ts)
 +- conftest.py                  (collect_ignore for e2e/ and playwright/)
 +- file_utils.py                (shared REPO_ROOT helper)
-+- check_ascii_compliance.py    (single-file ASCII checker, used by test_ascii_compliance.py)
++- check_ascii_compliance.py    (single-file ASCII checker)
 +- fix_ascii_compliance.py      (single-file ASCII fixer)
 +- fix_whitespace.py            (whitespace fixer)
 +- TESTS_README.md, TESTS_TYPESCRIPT_README.md
 +- web/
-|  +- test_web_build.py         (builds parts/* and checks output; PK/regimen checks via Node vm)
-|  `- test_pk_calibration.js    (PK calibration checks)
+|  +- test_web_build.py         (fast, build-free src/ presence check)
+|  `- parity_fixture.json       (legacy-vs-new DOM-id/control parity record)
 `- playwright/
-   `- repo_root.mjs             (helper; no *.spec.ts test files present yet)
+   +- app_boots.spec.ts         (browser smoke: bundle loads and reacts)
+   `- repo_root.mjs             (helper)
 ```
 
-### devel/
+## devel/ subtree
 
 ```text
 devel/
 +- DEVEL_README.md
 +- bump_version.py
 +- changelog_lib.py
-+- clean_build.sh        (light cleaner: build output, caches, test artifacts)
-+- dist_clean.sh          (deep cleaner: keeps package-lock.json for reproducible npm ci)
++- clean_build.sh        (wipes dist/ and build/test artifacts)
++- dist_clean.sh          (deep cleaner; keeps package-lock.json for npm ci)
 +- commit_changelog.py
 +- query_changelog.py
 +- rotate_changelog.py
@@ -110,54 +105,51 @@ devel/
 
 ## Generated artifacts
 
-- `chemotherapy_body_simulation.html` is committed (not generated-and-ignored) so the
-  app works without a build step; `build_app.sh` overwrites it in place.
-- `dist/`, `_site/`, `node_modules/`, `*.tsbuildinfo`, `.eslintcache`,
-  `.prettiercache`, `test-results/`, `playwright-report/`, `blob-report/`, `coverage/`,
-  `meta.json`, `stats.html` are all git-ignored (see [.gitignore](../.gitignore)).
-  `dist/` is the target of the currently-broken `build_github_pages.sh`.
-- `output*/` and `_temp*.?*` are also git-ignored (universal scratch conventions).
-- `report_*.txt` (for example `report_function_typing.txt`,
-  `report_markdown_links.txt` at the repo root) are git-ignored lint report scratch
-  files.
+- `dist/` is the build output of [build_github_pages.sh](../build_github_pages.sh) and the
+  GitHub Pages artifact (`main.js`, `main.js.map`, `index.html`, `style.css`, `.nojekyll`).
+  It is git-ignored and rebuilt from `src/` on every build.
+- `_site/`, `node_modules/`, `*.tsbuildinfo`, `.eslintcache`, `.prettiercache`,
+  `test-results/`, `playwright-report/`, `blob-report/`, `coverage/`, `meta.json`, and
+  `stats.html` are git-ignored (see [.gitignore](../.gitignore)).
+- `output*/` and `_temp*.?*` are git-ignored scratch conventions.
+- `report_*.txt` at the repo root (for example `report_markdown_links.txt`) are git-ignored
+  lint report scratch files.
 
 ## Documentation map
 
-- [docs/CODE_ARCHITECTURE.md](CODE_ARCHITECTURE.md): system design, components, data
-  flow (this file's companion).
+- [docs/CODE_ARCHITECTURE.md](CODE_ARCHITECTURE.md): system design, components, data flow
+  (this file's companion).
 - [docs/FILE_STRUCTURE.md](FILE_STRUCTURE.md): this file.
-- [docs/USAGE.md](USAGE.md): currently documents the starter-template `reset_repo.py`
-  bootstrap flow, not this app's own build/run/test commands; verify and update
-  separately if app-specific usage docs are wanted here.
+- [docs/CONTRACTS.md](CONTRACTS.md): canonical data-model and event-flow spec; normative
+  source for [src/types.ts](../src/types.ts).
+- [docs/INSTALL.md](INSTALL.md), [docs/USAGE.md](USAGE.md): setup and run instructions.
 - [docs/CHANGELOG.md](CHANGELOG.md): dated change log; rotates into
   `docs/CHANGELOG-YYYY-MM[a-z].md` archives per [REPO_STYLE.md](REPO_STYLE.md).
+- [docs/NEWS.md](NEWS.md), [docs/RELEASE_HISTORY.md](RELEASE_HISTORY.md),
+  [docs/ROADMAP.md](ROADMAP.md), [docs/RELATED_PROJECTS.md](RELATED_PROJECTS.md),
+  [docs/TROUBLESHOOTING.md](TROUBLESHOOTING.md): release, roadmap, and support docs.
 - [docs/REPO_STYLE.md](REPO_STYLE.md), [docs/PYTHON_STYLE.md](PYTHON_STYLE.md),
-  [docs/MARKDOWN_STYLE.md](MARKDOWN_STYLE.md),
-  [docs/TYPESCRIPT_STYLE.md](TYPESCRIPT_STYLE.md): style guides.
+  [docs/MARKDOWN_STYLE.md](MARKDOWN_STYLE.md), [docs/TYPESCRIPT_STYLE.md](TYPESCRIPT_STYLE.md):
+  style guides.
 - [docs/E2E_TESTS.md](E2E_TESTS.md), [docs/PYTEST_STYLE.md](PYTEST_STYLE.md),
   [docs/PLAYWRIGHT_USAGE.md](PLAYWRIGHT_USAGE.md): testing conventions.
-- [docs/CLAUDE_HOOK_USAGE_GUIDE.md](CLAUDE_HOOK_USAGE_GUIDE.md): centrally maintained
-  agent permissions reference.
-- [docs/AUTHORS.md](AUTHORS.md): centrally maintained maintainers list.
+- [docs/CLAUDE_HOOK_USAGE_GUIDE.md](CLAUDE_HOOK_USAGE_GUIDE.md),
+  [docs/AUTHORS.md](AUTHORS.md): centrally maintained references.
 - [docs/active_plans/](active_plans/): in-flight planning artifacts, filed by kind
   (`active/`, `audits/`, `reports/`, `decisions/`, `workstreams/`).
-- [parts/CONTRACTS.md](../parts/CONTRACTS.md): lives under `parts/`, not `docs/`,
-  because it documents the app's internal data contracts alongside the source that
-  implements them.
 
 ## Where to add new work
 
-- App logic (drugs, regimens, PK math, rendering, UI wiring): add to the relevant
-  module under [parts/](../parts/); update
-  [parts/CONTRACTS.md](../parts/CONTRACTS.md) if the change adds or changes a data
-  field.
-- Tests for app behavior: extend
-  [tests/web/test_web_build.py](../tests/web/test_web_build.py) or add a new
-  `tests/web/test_*.py`; browser-driven checks belong under `tests/playwright/`
-  once `playwright.config.ts` exists.
-- Repo-wide lint/hygiene checks: add a new `tests/test_*.py` following the existing
-  pattern in [tests/](../tests/).
+- App logic (drugs, regimens, PK math, rendering, UI wiring): add to the relevant module
+  under [src/](../src/); update [docs/CONTRACTS.md](CONTRACTS.md) and
+  [src/types.ts](../src/types.ts) if the change adds or changes a data field.
+- Node unit tests for engine or state behavior: add a `tests/test_*.mjs` importing the
+  `src/*.ts` module under test.
+- Browser behavior: extend [tests/playwright/app_boots.spec.ts](../tests/playwright/app_boots.spec.ts)
+  or add a new `tests/playwright/*.spec.ts`.
+- Repo-wide lint/hygiene checks: add a new `tests/test_*.py` following the existing pattern
+  in [tests/](../tests/).
 - Developer tooling and one-off scripts: [devel/](../devel/) for repo maintenance,
-  [tools/](../tools/) for standalone utilities used by the app or its docs pipeline.
+  [tools/](../tools/) for standalone utilities.
 - Documentation: `docs/` for reference docs (SCREAMING_SNAKE_CASE filenames);
   `docs/active_plans/<subdir>/` for working planning artifacts, filed by kind.

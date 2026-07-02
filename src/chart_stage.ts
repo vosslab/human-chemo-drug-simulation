@@ -1,12 +1,42 @@
-function chemoChartFormatMg(value) {
+// ============================================
+// chart_stage.ts -- SVG concentration and outcome chart rendering
+// ============================================
+// Builds the log-scale concentration chart and the linear outcome (tumor
+// size / patient vitality) chart, then writes their markup into the DOM.
+// Ported 1:1 from the legacy chart_stage module; SVG path strings and numeric
+// formatting must stay byte-identical to the legacy implementation.
+// ============================================
+
+import type { ChemoState, DrugDefinition, SimulationSample } from "./types";
+import { CHEMO_STATE, chemoStateGetCurrentSample } from "./game_state";
+import {
+  chemoRegimenGetById,
+  chemoRegimenBuildDrugList,
+  chemoRegimenBuildDoseEvents,
+} from "./regimen_engine";
+import { requireElement } from "./dom";
+
+// ============================================
+// Format a concentration value in mg/L with two decimal places
+export function chemoChartFormatMg(value: number): string {
   return value.toFixed(2) + " mg/L";
 }
 
-function chemoChartBuildTherapeuticBand(width, height, padding, minY, maxY, config) {
-  var regimen = chemoRegimenGetById(config.regimenId);
-  var windowSpec = regimen.therapeuticWindow || { ineffectiveMax: 1.5, toxicMin: 12 };
-  var plotHeight = height - padding * 2;
-  var ineffectiveY = chemoChartMapLogY(
+// ============================================
+// Build the therapeutic-window shaded band and its labels for the
+// concentration chart
+export function chemoChartBuildTherapeuticBand(
+  width: number,
+  height: number,
+  padding: number,
+  minY: number,
+  maxY: number,
+  config: ChemoState,
+): string {
+  const regimen = chemoRegimenGetById(config.regimenId);
+  const windowSpec = regimen.therapeuticWindow || { ineffectiveMax: 1.5, toxicMin: 12 };
+  const plotHeight = height - padding * 2;
+  const ineffectiveY = chemoChartMapLogY(
     windowSpec.ineffectiveMax,
     minY,
     maxY,
@@ -14,7 +44,7 @@ function chemoChartBuildTherapeuticBand(width, height, padding, minY, maxY, conf
     height,
     padding,
   );
-  var toxicY = chemoChartMapLogY(windowSpec.toxicMin, minY, maxY, plotHeight, height, padding);
+  const toxicY = chemoChartMapLogY(windowSpec.toxicMin, minY, maxY, plotHeight, height, padding);
   return (
     "" +
     "<rect x='" +
@@ -62,13 +92,19 @@ function chemoChartBuildTherapeuticBand(width, height, padding, minY, maxY, conf
   );
 }
 
-function chemoChartBuildXAxisTicks(maxTimeHour, width, height, padding) {
-  var tickMarkup = [];
-  var index;
-  var dayCount = Math.max(0, Math.floor(maxTimeHour / 24));
-  for (index = 0; index <= dayCount; index += 1) {
-    var tickHour = index * 24;
-    var tickX = padding + ((width - padding * 2) * tickHour) / Math.max(maxTimeHour, 1);
+// ============================================
+// Build day-boundary tick marks and labels for the shared x axis
+export function chemoChartBuildXAxisTicks(
+  maxTimeHour: number,
+  width: number,
+  height: number,
+  padding: number,
+): string[] {
+  const tickMarkup: string[] = [];
+  const dayCount = Math.max(0, Math.floor(maxTimeHour / 24));
+  for (let index = 0; index <= dayCount; index += 1) {
+    const tickHour = index * 24;
+    const tickX = padding + ((width - padding * 2) * tickHour) / Math.max(maxTimeHour, 1);
     tickMarkup.push(
       "<line x1='" +
         tickX.toFixed(1) +
@@ -91,10 +127,12 @@ function chemoChartBuildXAxisTicks(maxTimeHour, width, height, padding) {
   return tickMarkup;
 }
 
-function chemoChartFormatTimeHour(timeHour) {
-  var totalHours = Math.max(0, timeHour || 0);
-  var dayNumber = Math.floor(totalHours / 24);
-  var dayHours = Math.round(totalHours - dayNumber * 24);
+// ============================================
+// Format a time-in-hours value as "Day N, H h" for the footer note
+export function chemoChartFormatTimeHour(timeHour: number): string {
+  const totalHours = Math.max(0, timeHour || 0);
+  let dayNumber = Math.floor(totalHours / 24);
+  let dayHours = Math.round(totalHours - dayNumber * 24);
   if (dayHours === 24) {
     dayNumber += 1;
     dayHours = 0;
@@ -102,28 +140,52 @@ function chemoChartFormatTimeHour(timeHour) {
   return "Day " + dayNumber + ", " + dayHours + " h";
 }
 
-function chemoChartLog10(value) {
+// ============================================
+// Base-10 logarithm helper for the log-scale y axis
+export function chemoChartLog10(value: number): number {
   return Math.log(value) / Math.log(10);
 }
 
-function chemoChartMapLogY(value, minY, maxY, plotHeight, height, padding) {
-  var safeValue = Math.max(value, minY);
-  var minLog = chemoChartLog10(minY);
-  var maxLog = chemoChartLog10(maxY);
-  var valueLog = chemoChartLog10(safeValue);
-  var ratio = (valueLog - minLog) / Math.max(maxLog - minLog, 0.0001);
+// ============================================
+// Map a concentration value onto the log-scale y coordinate of the chart
+export function chemoChartMapLogY(
+  value: number,
+  minY: number,
+  maxY: number,
+  plotHeight: number,
+  height: number,
+  padding: number,
+): number {
+  const safeValue = Math.max(value, minY);
+  const minLog = chemoChartLog10(minY);
+  const maxLog = chemoChartLog10(maxY);
+  const valueLog = chemoChartLog10(safeValue);
+  const ratio = (valueLog - minLog) / Math.max(maxLog - minLog, 0.0001);
   return height - padding - ratio * plotHeight;
 }
 
-function chemoChartBuildPath(samples, drugId, minY, maxY, width, height, padding) {
-  var points = [];
-  var index;
-  var plotWidth = width - padding * 2;
-  var plotHeight = height - padding * 2;
-  for (index = 0; index < samples.length; index += 1) {
-    var x = padding + (plotWidth * index) / Math.max(samples.length - 1, 1);
-    var y = chemoChartMapLogY(
-      samples[index].drugConcentrations[drugId] || 0,
+// ============================================
+// Build an SVG path string for one drug's concentration curve
+export function chemoChartBuildPath(
+  samples: SimulationSample[],
+  drugId: string,
+  minY: number,
+  maxY: number,
+  width: number,
+  height: number,
+  padding: number,
+): string {
+  const points: string[] = [];
+  const plotWidth = width - padding * 2;
+  const plotHeight = height - padding * 2;
+  for (let index = 0; index < samples.length; index += 1) {
+    const sample = samples[index];
+    if (sample === undefined) {
+      throw new Error(`chemoChartBuildPath: samples index out of bounds at ${index}`);
+    }
+    const x = padding + (plotWidth * index) / Math.max(samples.length - 1, 1);
+    const y = chemoChartMapLogY(
+      sample.drugConcentrations[drugId] || 0,
       minY,
       maxY,
       plotHeight,
@@ -135,62 +197,99 @@ function chemoChartBuildPath(samples, drugId, minY, maxY, width, height, padding
   return points.join(" ");
 }
 
-function chemoChartBuildTotalPath(samples, minY, maxY, width, height, padding) {
-  var points = [];
-  var index;
-  var plotWidth = width - padding * 2;
-  var plotHeight = height - padding * 2;
-  for (index = 0; index < samples.length; index += 1) {
-    var x = padding + (plotWidth * index) / Math.max(samples.length - 1, 1);
-    var y = chemoChartMapLogY(samples[index].totalBurden, minY, maxY, plotHeight, height, padding);
+// ============================================
+// Build an SVG path string for the total-burden dashed curve
+export function chemoChartBuildTotalPath(
+  samples: SimulationSample[],
+  minY: number,
+  maxY: number,
+  width: number,
+  height: number,
+  padding: number,
+): string {
+  const points: string[] = [];
+  const plotWidth = width - padding * 2;
+  const plotHeight = height - padding * 2;
+  for (let index = 0; index < samples.length; index += 1) {
+    const sample = samples[index];
+    if (sample === undefined) {
+      throw new Error(`chemoChartBuildTotalPath: samples index out of bounds at ${index}`);
+    }
+    const x = padding + (plotWidth * index) / Math.max(samples.length - 1, 1);
+    const y = chemoChartMapLogY(sample.totalBurden, minY, maxY, plotHeight, height, padding);
     points.push((index === 0 ? "M" : "L") + x.toFixed(1) + " " + y.toFixed(1));
   }
   return points.join(" ");
 }
 
-function chemoChartBuildPercentPath(samples, metricKey, width, height, padding) {
-  var points = [];
-  var index;
-  var plotWidth = width - padding * 2;
-  var plotHeight = height - padding * 2;
-  for (index = 0; index < samples.length; index += 1) {
-    var x = padding + (plotWidth * index) / Math.max(samples.length - 1, 1);
-    var metricValue = samples[index][metricKey];
-    var percentValue;
+// ============================================
+// Build an SVG path string for a linear 0-100% metric curve (tumor size or
+// patient vitality) on the outcomes chart
+export function chemoChartBuildPercentPath(
+  samples: SimulationSample[],
+  metricKey: "tumorVolume" | "patientHealth",
+  width: number,
+  height: number,
+  padding: number,
+): string {
+  const points: string[] = [];
+  const plotWidth = width - padding * 2;
+  const plotHeight = height - padding * 2;
+  for (let index = 0; index < samples.length; index += 1) {
+    const sample = samples[index];
+    if (sample === undefined) {
+      throw new Error(`chemoChartBuildPercentPath: samples index out of bounds at ${index}`);
+    }
+    const x = padding + (plotWidth * index) / Math.max(samples.length - 1, 1);
+    const metricValue = sample[metricKey];
+    let percentValue: number;
     if (metricKey === "tumorVolume") {
       percentValue = (typeof metricValue === "number" ? metricValue : 0) * 100;
     } else {
       percentValue = typeof metricValue === "number" ? metricValue : 0;
     }
-    var y = height - padding - (percentValue / 100) * plotHeight;
+    const y = height - padding - (percentValue / 100) * plotHeight;
     points.push((index === 0 ? "M" : "L") + x.toFixed(1) + " " + y.toFixed(1));
   }
   return points.join(" ");
 }
 
-function chemoChartRender() {
-  var chartRoot = document.getElementById("chart-root");
-  var legendRoot = document.getElementById("chart-legend");
-  var outcomesRoot = document.getElementById("outcome-chart-root");
-  var outcomesLegendRoot = document.getElementById("outcome-chart-legend");
-  var currentSample = chemoStateGetCurrentSample();
-  var regimenDrugs = chemoRegimenBuildDrugList(CHEMO_STATE.regimenId);
-  var samples = CHEMO_STATE.samples;
-  var width = 760;
-  var height = 260;
-  var padding = 40;
-  var index;
-  var maxY = 0;
-  var minPositiveY = null;
-  for (index = 0; index < samples.length; index += 1) {
-    maxY = Math.max(maxY, samples[index].totalBurden);
-    if (samples[index].totalBurden > 0) {
-      if (minPositiveY === null || samples[index].totalBurden < minPositiveY) {
-        minPositiveY = samples[index].totalBurden;
+// ============================================
+// Render the concentration chart and outcomes chart into the DOM, along
+// with their legends and footer notes
+export function chemoChartRender(): void {
+  const chartRoot = requireElement("chart-root");
+  const legendRoot = requireElement("chart-legend");
+  const outcomesRoot = requireElement("outcome-chart-root");
+  const outcomesLegendRoot = requireElement("outcome-chart-legend");
+  const currentSample = chemoStateGetCurrentSample();
+  if (currentSample === null) {
+    throw new Error("chemoChartRender: no current sample available");
+  }
+  const regimenDrugs: DrugDefinition[] = chemoRegimenBuildDrugList(CHEMO_STATE.regimenId);
+  const samples: SimulationSample[] = CHEMO_STATE.samples;
+  const width = 760;
+  const height = 260;
+  const padding = 40;
+  let maxY = 0;
+  let minPositiveY: number | null = null;
+  for (let index = 0; index < samples.length; index += 1) {
+    const sample = samples[index];
+    if (sample === undefined) {
+      throw new Error(`chemoChartRender: samples index out of bounds at ${index}`);
+    }
+    maxY = Math.max(maxY, sample.totalBurden);
+    if (sample.totalBurden > 0) {
+      if (minPositiveY === null || sample.totalBurden < minPositiveY) {
+        minPositiveY = sample.totalBurden;
       }
     }
-    for (var drugIndex = 0; drugIndex < regimenDrugs.length; drugIndex += 1) {
-      var drugAmount = samples[index].drugConcentrations[regimenDrugs[drugIndex].id] || 0;
+    for (let drugIndex = 0; drugIndex < regimenDrugs.length; drugIndex += 1) {
+      const regimenDrug = regimenDrugs[drugIndex];
+      if (regimenDrug === undefined) {
+        throw new Error(`chemoChartRender: regimenDrugs index out of bounds at ${drugIndex}`);
+      }
+      const drugAmount = sample.drugConcentrations[regimenDrug.id] || 0;
       if (drugAmount > 0 && (minPositiveY === null || drugAmount < minPositiveY)) {
         minPositiveY = drugAmount;
       }
@@ -198,14 +297,14 @@ function chemoChartRender() {
   }
   maxY = Math.max(maxY, 0.1);
   minPositiveY = Math.max(0.001, minPositiveY || maxY / 1000);
-  var minPower = Math.floor(chemoChartLog10(minPositiveY));
-  var maxPower = Math.ceil(chemoChartLog10(maxY));
-  var minY = Math.pow(10, minPower);
-  var maxScaleY = Math.pow(10, Math.max(minPower + 1, maxPower));
-  var gridLines = [];
-  for (index = maxPower; index >= minPower; index -= 1) {
-    var labelValue = Math.pow(10, index);
-    var y = chemoChartMapLogY(labelValue, minY, maxScaleY, height - padding * 2, height, padding);
+  const minPower = Math.floor(chemoChartLog10(minPositiveY));
+  const maxPower = Math.ceil(chemoChartLog10(maxY));
+  const minY = Math.pow(10, minPower);
+  const maxScaleY = Math.pow(10, Math.max(minPower + 1, maxPower));
+  const gridLines: string[] = [];
+  for (let index = maxPower; index >= minPower; index -= 1) {
+    const labelValue = Math.pow(10, index);
+    const y = chemoChartMapLogY(labelValue, minY, maxScaleY, height - padding * 2, height, padding);
     gridLines.push(
       "<line x1='" +
         padding +
@@ -225,9 +324,13 @@ function chemoChartRender() {
         "</text>",
     );
   }
-  var maxTimeHour = samples[samples.length - 1].timeHour;
-  var xAxisTicks = chemoChartBuildXAxisTicks(maxTimeHour, width, height, padding);
-  var therapeuticBand = chemoChartBuildTherapeuticBand(
+  const lastSample = samples[samples.length - 1];
+  if (lastSample === undefined) {
+    throw new Error("chemoChartRender: samples array is empty");
+  }
+  const maxTimeHour = lastSample.timeHour;
+  const xAxisTicks = chemoChartBuildXAxisTicks(maxTimeHour, width, height, padding);
+  const therapeuticBand = chemoChartBuildTherapeuticBand(
     width,
     height,
     padding,
@@ -235,20 +338,25 @@ function chemoChartRender() {
     maxScaleY,
     CHEMO_STATE,
   );
-  var doseMarkerMarkup = [];
-  var doseEvents = chemoRegimenBuildDoseEvents(
+  const doseMarkerMarkup: string[] = [];
+  // NOTE: legacy CHEMO_STATE never carried a bsa field either; chemoRegimenBuildDoseEvents
+  // falls back to SIM_DEFAULTS.patientBSA when bsa is undefined, matching legacy behavior
+  const doseEvents = chemoRegimenBuildDoseEvents(
     CHEMO_STATE.regimenId,
-    CHEMO_STATE.bsa,
+    undefined,
     CHEMO_STATE.doseMultiplier,
     CHEMO_STATE.doseCount,
     CHEMO_STATE.doseIntervalDays,
   );
-  for (index = 0; index < doseEvents.length; index += 1) {
-    var event = doseEvents[index];
+  for (let index = 0; index < doseEvents.length; index += 1) {
+    const event = doseEvents[index];
+    if (event === undefined) {
+      throw new Error(`chemoChartRender: doseEvents index out of bounds at ${index}`);
+    }
     if (event.startHour > maxTimeHour) {
       continue;
     }
-    var doseX = padding + ((width - padding * 2) * event.startHour) / Math.max(maxTimeHour, 1);
+    const doseX = padding + ((width - padding * 2) * event.startHour) / Math.max(maxTimeHour, 1);
     doseMarkerMarkup.push(
       "<line x1='" +
         doseX.toFixed(1) +
@@ -261,9 +369,12 @@ function chemoChartRender() {
         "' stroke='rgba(186,74,47,0.22)' stroke-width='1.4' />",
     );
   }
-  var lineMarkup = [];
-  for (index = 0; index < regimenDrugs.length; index += 1) {
-    var drug = regimenDrugs[index];
+  const lineMarkup: string[] = [];
+  for (let index = 0; index < regimenDrugs.length; index += 1) {
+    const drug = regimenDrugs[index];
+    if (drug === undefined) {
+      throw new Error(`chemoChartRender: regimenDrugs index out of bounds at ${index}`);
+    }
     lineMarkup.push(
       "<path d='" +
         chemoChartBuildPath(samples, drug.id, minY, maxScaleY, width, height, padding) +
@@ -277,16 +388,20 @@ function chemoChartRender() {
       chemoChartBuildTotalPath(samples, minY, maxScaleY, width, height, padding) +
       "' fill='none' stroke='#1f2a33' stroke-width='2' stroke-dasharray='7 6' />",
   );
-  var sampleX =
+  const sampleX =
     padding +
     ((width - padding * 2) * CHEMO_STATE.currentSampleIndex) / Math.max(samples.length - 1, 1);
-  var deathMarker = "";
-  for (index = 0; index < samples.length; index += 1) {
-    if (samples[index].lifeStatus === "Deceased") {
-      var deathX = padding + ((width - padding * 2) * index) / Math.max(samples.length - 1, 1);
-      var labelWidth = 112;
-      var labelX = Math.max(padding + 4, Math.min(width - padding - labelWidth - 4, deathX + 8));
-      var overlayWidth = Math.max(0, width - padding - deathX);
+  let deathMarker = "";
+  for (let index = 0; index < samples.length; index += 1) {
+    const sample = samples[index];
+    if (sample === undefined) {
+      throw new Error(`chemoChartRender: samples index out of bounds at ${index}`);
+    }
+    if (sample.lifeStatus === "Deceased") {
+      const deathX = padding + ((width - padding * 2) * index) / Math.max(samples.length - 1, 1);
+      const labelWidth = 112;
+      const labelX = Math.max(padding + 4, Math.min(width - padding - labelWidth - 4, deathX + 8));
+      const overlayWidth = Math.max(0, width - padding - deathX);
       deathMarker =
         "" +
         "<rect x='" +
@@ -327,7 +442,7 @@ function chemoChartRender() {
       break;
     }
   }
-  var svg =
+  const svg =
     "" +
     "<svg class='chart-svg' viewBox='0 0 " +
     width +
@@ -368,9 +483,12 @@ function chemoChartRender() {
     chemoChartFormatTimeHour(currentSample.timeHour) +
     "</strong>. Y-axis uses a log scale. Pale vertical lines mark dose administrations; the dashed line shows total burden across all active drugs, and the colored band shows ineffective, therapeutic, and toxic exposure zones.</p>";
   chartRoot.innerHTML = svg;
-  var legendMarkup = [];
-  for (index = 0; index < regimenDrugs.length; index += 1) {
-    var legendDrug = regimenDrugs[index];
+  const legendMarkup: string[] = [];
+  for (let index = 0; index < regimenDrugs.length; index += 1) {
+    const legendDrug = regimenDrugs[index];
+    if (legendDrug === undefined) {
+      throw new Error(`chemoChartRender: regimenDrugs index out of bounds at ${index}`);
+    }
     legendMarkup.push(
       "<div class='legend-chip'><span class='legend-swatch' style='background:" +
         legendDrug.color +
@@ -388,13 +506,13 @@ function chemoChartRender() {
   );
   legendRoot.innerHTML = legendMarkup.join("");
 
-  var outcomeWidth = 760;
-  var outcomeHeight = 170;
-  var outcomePadding = 34;
-  var outcomeGrid = [];
-  for (index = 0; index <= 4; index += 1) {
-    var gridPercent = index * 25;
-    var gridY =
+  const outcomeWidth = 760;
+  const outcomeHeight = 170;
+  const outcomePadding = 34;
+  const outcomeGrid: string[] = [];
+  for (let index = 0; index <= 4; index += 1) {
+    const gridPercent = index * 25;
+    const gridY =
       outcomeHeight - outcomePadding - (gridPercent / 100) * (outcomeHeight - outcomePadding * 2);
     outcomeGrid.push(
       "<line x1='" +
@@ -413,17 +531,17 @@ function chemoChartRender() {
         "%</text>",
     );
   }
-  var outcomeTicks = chemoChartBuildXAxisTicks(
+  const outcomeTicks = chemoChartBuildXAxisTicks(
     maxTimeHour,
     outcomeWidth,
     outcomeHeight,
     outcomePadding,
   );
-  var outcomeSampleX =
+  const outcomeSampleX =
     outcomePadding +
     ((outcomeWidth - outcomePadding * 2) * CHEMO_STATE.currentSampleIndex) /
       Math.max(samples.length - 1, 1);
-  var outcomeSvg =
+  const outcomeSvg =
     "" +
     "<svg class='chart-svg' viewBox='0 0 " +
     outcomeWidth +

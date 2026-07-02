@@ -172,16 +172,8 @@ trap print_summary EXIT
 # Steps
 SUMMARY_ENABLED=1
 
-# 1. typecheck
-# tsconfig.json includes **/*.ts. `tsc` exits 2 with TS18003 when the include
-# list matches no files (a JS-only consumer of the typescript template). Guard
-# with a .ts presence check and SKIP loudly rather than fail the gate -- same
-# honesty principle as the test:node step below.
-if find . -path ./node_modules -prune -o -name '*.ts' -print 2>/dev/null | grep -q .; then
-	step_run typecheck npx tsc --noEmit -p tsconfig.json
-else
-	step_skip typecheck "no .ts files present"
-fi
+# 1. typecheck (always)
+step_run typecheck npx tsc --noEmit -p tsconfig.json
 
 # 2. typecheck:lint
 # Wider typecheck covers tests/ and tools/ via tsconfig.lint.json.
@@ -189,13 +181,9 @@ fi
 # consumer has it at bootstrap; no SKIP fallback needed.
 # Note: `tsc -p tsconfig.lint.json` exits 2 with TS18003 if its include list
 # matches no files. A consumer with no tests/*.ts and no tools/*.ts will hit
-# this. Guard with a .ts presence check under tests/ and tools/ and SKIP loudly
-# rather than fail, matching the typecheck step above.
-if find tests tools -name '*.ts' 2>/dev/null | grep -q .; then
-	step_run typecheck:lint npx tsc --noEmit -p tsconfig.lint.json
-else
-	step_skip typecheck:lint "no tests/*.ts or tools/*.ts files present"
-fi
+# this. Workaround: seed a stub `.ts` in either tree, or extend the include
+# list locally in the consumer-owned tsconfig.lint.json.
+step_run typecheck:lint npx tsc --noEmit -p tsconfig.lint.json
 
 # 3. lint
 # Single recursive glob covers every JS/TS extension from cwd: catches src/,

@@ -1,20 +1,109 @@
 // ============================================
-// pk_engine.js -- Pharmacokinetic engine with exponential decay models
+// pk_engine.ts -- Pharmacokinetic engine with exponential decay models
 // ============================================
 // Uses canonical units: time in minutes, amount in mg, volume in L, concentration in mg/L
 // Vd source is L/kg, converted to total L using patient weight at calculation time
 // ============================================
 
+import type {
+  RandomnessMode,
+  CaseProfile,
+  PatientProfile,
+  RegimenProfile,
+  DrugDefinition,
+  VisualState,
+  AdverseEffect,
+  AdverseEffectRule,
+  Severity,
+  EffectState,
+  LifeStatus,
+  TherapeuticWindowStatus,
+  TherapeuticWindow,
+  SimulationSample,
+  SimulationConfig,
+  RunSummary,
+  Grade,
+  ChemoState,
+  DoseEvent,
+  ExtractionRoutes,
+} from "./types";
+import { SIM_DEFAULTS, ORGAN_EXTRACTION, CHEMO_CONSTANTS } from "./constants";
+import {
+  chemoRegimenGetById,
+  chemoRegimenGetDefaultDoseCount,
+  chemoRegimenGetDefaultDoseIntervalDays,
+  chemoRegimenBuildDoseEvents,
+  chemoRegimenBuildDrugList,
+} from "./regimen_engine";
+
+// ============================================
+// Local input views describing the loose config/state shapes the engine reads.
+// The PK helpers are called both with a full SimulationConfig (production) and
+// with partial config/state objects (tests, or before chemoPkBuildSamples has
+// populated the derived fields), so the optional fields below are honest.
+// ============================================
+
+// Subset read by chemoPkGetRandomnessScale.
+interface RandomnessConfigView {
+  randomnessMode?: RandomnessMode;
+}
+
+// Subset read by regimen-id lookups.
+interface RegimenConfigView {
+  regimenId: string;
+}
+
+// Subset read by chemoPkEstimateTypicalPeak.
+interface PeakConfigView {
+  weightKg?: number;
+  bsa?: number;
+}
+
+// Fields the patient-profile builder reads from a state or config object.
+interface PatientProfileInput {
+  caseProfile?: CaseProfile | null;
+  genderBalance?: number;
+  bmi?: number;
+  ageYears?: number;
+  activityLevel?: number;
+}
+
+// General loose config view used by the per-sample computation helpers.
+interface PkConfigView {
+  regimenId: string;
+  tumorSensitivity: number;
+  bodyScale: number;
+  randomnessMode?: RandomnessMode;
+  caseProfile?: CaseProfile | null;
+  regimenProfile?: RegimenProfile;
+  patientProfile?: PatientProfile;
+  resilienceMultiplier?: number;
+  weightKg?: number;
+  bsa?: number;
+}
+
+// A single scheduled dose used for concentration superposition.
+interface PkDose {
+  timeMins: number;
+  amountMg: number;
+}
+
+// Result bundle returned by chemoPkBuildAdverseEffects.
+interface AdverseEffectResult {
+  effects: AdverseEffect[];
+  effectStateMap: Record<string, EffectState>;
+}
+
 // ============================================
 // Utility: clamp value between minimum and maximum
-function chemoPkClamp(value, minimum, maximum) {
+export function chemoPkClamp(value: number, minimum: number, maximum: number): number {
   return Math.max(minimum, Math.min(maximum, value));
 }
 
 // ============================================
 // Map randomness mode to simulation noise intensity
-function chemoPkGetRandomnessScale(config) {
-  var mode = config.randomnessMode || "clinical";
+export function chemoPkGetRandomnessScale(config: RandomnessConfigView): number {
+  const mode = config.randomnessMode || "clinical";
   if (mode === "deterministic") {
     return 0;
   }
@@ -26,42 +115,43 @@ function chemoPkGetRandomnessScale(config) {
 
 // ============================================
 // Normalize regimen-level efficacy and toxicity modifiers
-function chemoPkGetRegimenProfile(config) {
-  var regimen = chemoRegimenGetById(config.regimenId);
-  return {
+export function chemoPkGetRegimenProfile(config: RegimenConfigView): RegimenProfile {
+  const regimen = chemoRegimenGetById(config.regimenId);
+  const profile: RegimenProfile = {
     efficacyWeight: regimen.efficacyWeight || 1,
     acuteToxicityWeight: regimen.acuteToxicityWeight || 1,
     cumulativeToxicityWeight: regimen.cumulativeToxicityWeight || 1,
     recoveryPenalty: regimen.recoveryPenalty || 1,
     volatility: regimen.volatility || 1,
   };
+  return profile;
 }
 
 // ============================================
 // Derive body size and physiologic modifiers from patient-factor sliders
-function chemoPkBuildPatientProfile(state) {
-  var caseProfile = state.caseProfile || null;
-  var genderBalance = typeof state.genderBalance === "number" ? state.genderBalance : 0;
-  var bmi = typeof state.bmi === "number" ? state.bmi : 24;
-  var ageYears = typeof state.ageYears === "number" ? state.ageYears : 52;
-  var activityLevel = typeof state.activityLevel === "number" ? state.activityLevel : 0.35;
-  var heightCm = 162 + genderBalance * 16;
-  var heightMeters = heightCm / 100;
-  var weightKg = bmi * heightMeters * heightMeters;
-  var bsa = Math.sqrt((heightCm * weightKg) / 3600);
-  var clearanceMultiplier =
+export function chemoPkBuildPatientProfile(state: PatientProfileInput): PatientProfile {
+  const caseProfile = state.caseProfile || null;
+  const genderBalance = typeof state.genderBalance === "number" ? state.genderBalance : 0;
+  const bmi = typeof state.bmi === "number" ? state.bmi : 24;
+  const ageYears = typeof state.ageYears === "number" ? state.ageYears : 52;
+  const activityLevel = typeof state.activityLevel === "number" ? state.activityLevel : 0.35;
+  const heightCm = 162 + genderBalance * 16;
+  const heightMeters = heightCm / 100;
+  const weightKg = bmi * heightMeters * heightMeters;
+  const bsa = Math.sqrt((heightCm * weightKg) / 3600);
+  let clearanceMultiplier =
     1 +
     (activityLevel - 0.35) * 0.35 +
     genderBalance * 0.04 -
     ((ageYears - 50) / 40) * 0.12 -
     ((bmi - 24) / 20) * 0.08;
-  var resilienceMultiplier =
+  let resilienceMultiplier =
     1 + (activityLevel - 0.35) * 0.45 - ((ageYears - 50) / 40) * 0.18 - ((bmi - 24) / 20) * 0.1;
   if (caseProfile) {
     clearanceMultiplier *= caseProfile.clearanceMultiplier || 1;
     resilienceMultiplier *= caseProfile.resilienceMultiplier || 1;
   }
-  return {
+  const profile: PatientProfile = {
     genderBalance: genderBalance,
     heightCm: heightCm,
     weightKg: Math.max(42, weightKg),
@@ -75,28 +165,29 @@ function chemoPkBuildPatientProfile(state) {
     clearanceMultiplier: chemoPkClamp(clearanceMultiplier, 0.65, 1.35),
     resilienceMultiplier: chemoPkClamp(resilienceMultiplier, 0.6, 1.4),
   };
+  return profile;
 }
 
 // ============================================
 // Estimate a normalized typical peak concentration for a drug
-function chemoPkEstimateTypicalPeak(drug, config) {
-  var weightKg = config.weightKg || SIM_DEFAULTS.patientWeightKg;
-  var bsa = config.bsa || SIM_DEFAULTS.patientBSA;
-  var doseMg = drug.typicalDoseMgM2 * bsa;
-  var vdLiters = drug.vdLPerKg * weightKg;
+export function chemoPkEstimateTypicalPeak(drug: DrugDefinition, config: PeakConfigView): number {
+  const weightKg = config.weightKg || SIM_DEFAULTS.patientWeightKg;
+  const bsa = config.bsa || SIM_DEFAULTS.patientBSA;
+  const doseMg = drug.typicalDoseMgM2 * bsa;
+  const vdLiters = drug.vdLPerKg * weightKg;
   return Math.max(0.01, doseMg / Math.max(vdLiters, 0.01));
 }
 
 // ============================================
 // Build a risk score for a particular adverse-effect rule
-function chemoPkBuildAdverseEffectScore(
-  effectRule,
-  exposureRatio,
-  cumulativeRatio,
-  totalBurden,
-  visualState,
-  patientHealth,
-) {
+export function chemoPkBuildAdverseEffectScore(
+  effectRule: AdverseEffectRule,
+  exposureRatio: number,
+  cumulativeRatio: number,
+  totalBurden: number,
+  visualState: VisualState,
+  patientHealth: number,
+): number {
   if (effectRule === "acute") {
     return Math.max(exposureRatio / 0.18, totalBurden / 16);
   }
@@ -129,7 +220,7 @@ function chemoPkBuildAdverseEffectScore(
 
 // ============================================
 // Convert an adverse-effect score into a traffic-light severity band
-function chemoPkBuildAdverseEffectSeverity(score) {
+export function chemoPkBuildAdverseEffectSeverity(score: number): Severity {
   if (score >= 1.2) {
     return "red";
   }
@@ -141,8 +232,12 @@ function chemoPkBuildAdverseEffectSeverity(score) {
 
 // ============================================
 // Convert an adverse-effect score into a realized symptom probability
-function chemoPkBuildAdverseEffectProbability(score, wasPresent, randomnessScale) {
-  var probability = chemoPkClamp(score * 0.45, 0.01, 0.98);
+export function chemoPkBuildAdverseEffectProbability(
+  score: number,
+  wasPresent: boolean | undefined,
+  randomnessScale: number,
+): number {
+  let probability = chemoPkClamp(score * 0.45, 0.01, 0.98);
   if (wasPresent) {
     probability = Math.max(probability, chemoPkClamp(0.35 + score * 0.22, 0.2, 0.98));
   }
@@ -160,9 +255,15 @@ function chemoPkBuildAdverseEffectProbability(score, wasPresent, randomnessScale
 
 // ============================================
 // Evaluate therapeutic window status from total burden
-function chemoPkBuildTherapeuticWindowStatus(totalBurden, config) {
-  var regimen = chemoRegimenGetById(config.regimenId);
-  var windowSpec = regimen.therapeuticWindow || { ineffectiveMax: 1.5, toxicMin: 12 };
+export function chemoPkBuildTherapeuticWindowStatus(
+  totalBurden: number,
+  config: RegimenConfigView,
+): TherapeuticWindowStatus {
+  const regimen = chemoRegimenGetById(config.regimenId);
+  const windowSpec: TherapeuticWindow = regimen.therapeuticWindow || {
+    ineffectiveMax: 1.5,
+    toxicMin: 12,
+  };
   if (totalBurden < windowSpec.ineffectiveMax) {
     return "ineffective";
   }
@@ -174,9 +275,12 @@ function chemoPkBuildTherapeuticWindowStatus(totalBurden, config) {
 
 // ============================================
 // Build event log entries for a timestep transition
-function chemoPkBuildStepEvents(previousSample, currentSample) {
-  var entries = [];
-  var dayText = "Day " + Math.floor(currentSample.timeHour / 24);
+export function chemoPkBuildStepEvents(
+  previousSample: SimulationSample | null,
+  currentSample: SimulationSample,
+): string[] {
+  const entries: string[] = [];
+  const dayText = "Day " + Math.floor(currentSample.timeHour / 24);
   if (
     currentSample.therapeuticWindowStatus === "optimal" &&
     (!previousSample || previousSample.therapeuticWindowStatus !== "optimal")
@@ -196,15 +300,13 @@ function chemoPkBuildStepEvents(previousSample, currentSample) {
     entries.push(dayText + ": patient vitality fell below 60%.");
   }
   if (previousSample) {
-    var effectIndex;
-    var previousEffects = {};
-    for (effectIndex = 0; effectIndex < previousSample.adverseEffects.length; effectIndex += 1) {
-      previousEffects[previousSample.adverseEffects[effectIndex].key] =
-        previousSample.adverseEffects[effectIndex];
+    // map previous effects by key for present/severity transition detection
+    const previousEffects: Record<string, AdverseEffect> = {};
+    for (const priorEffect of previousSample.adverseEffects) {
+      previousEffects[priorEffect.key] = priorEffect;
     }
-    for (effectIndex = 0; effectIndex < currentSample.adverseEffects.length; effectIndex += 1) {
-      var effect = currentSample.adverseEffects[effectIndex];
-      var priorEffect = previousEffects[effect.key];
+    for (const effect of currentSample.adverseEffects) {
+      const priorEffect = previousEffects[effect.key];
       if (effect.present && (!priorEffect || !priorEffect.present)) {
         entries.push(dayText + ": " + effect.label.toLowerCase() + " started.");
       }
@@ -224,37 +326,44 @@ function chemoPkBuildStepEvents(previousSample, currentSample) {
 
 // ============================================
 // Build an end-of-run scorecard and grade
-function chemoPkBuildRunSummary(samples, config) {
-  var firstSample = samples[0];
-  var lastSample = samples[samples.length - 1];
-  var peakExposure = chemoPkFindPeakExposure(samples);
-  var minTumor = chemoPkFindMinimumTumorVolume(samples);
-  var tumorReduction = chemoPkClamp(
+export function chemoPkBuildRunSummary(
+  samples: SimulationSample[],
+  config: PkConfigView,
+): RunSummary {
+  const firstSample = samples[0];
+  const lastSample = samples[samples.length - 1];
+  if (firstSample === undefined || lastSample === undefined) {
+    throw new Error("chemoPkBuildRunSummary requires at least one sample");
+  }
+  const peakExposure = chemoPkFindPeakExposure(samples);
+  const minTumor = chemoPkFindMinimumTumorVolume(samples);
+  const tumorReduction = chemoPkClamp(
     (1 - minTumor / Math.max(firstSample.tumorVolume, 0.01)) * 100,
     0,
     100,
   );
-  var toxicityBurden = chemoPkClamp(100 - peakExposure * 3.2, 0, 100);
-  var survivalScore =
+  const toxicityBurden = chemoPkClamp(100 - peakExposure * 3.2, 0, 100);
+  const survivalScore =
     lastSample.lifeStatus === "Deceased" ? 0 : chemoPkClamp(lastSample.patientHealth, 0, 100);
-  var responseTimeIndex = 0;
-  var sampleIndex;
-  for (sampleIndex = 0; sampleIndex < samples.length; sampleIndex += 1) {
-    if (samples[sampleIndex].tumorVolume <= 0.5) {
+  let responseTimeIndex = 0;
+  for (let sampleIndex = 0; sampleIndex < samples.length; sampleIndex += 1) {
+    // sampleIndex is within bounds by the loop condition
+    if (samples[sampleIndex]!.tumorVolume <= 0.5) {
       responseTimeIndex = sampleIndex;
       break;
     }
   }
-  var responseTimeHours = samples[Math.min(responseTimeIndex, samples.length - 1)].timeHour;
-  var speedScore = responseTimeHours > 0 ? chemoPkClamp(100 - responseTimeHours / 6, 0, 100) : 25;
-  var overTreatmentPenalty = chemoPkClamp(Math.max(0, peakExposure - 14) * 4, 0, 100);
-  var totalScore =
+  // index is clamped into [0, length-1] and samples is non-empty (checked above)
+  const responseTimeHours = samples[Math.min(responseTimeIndex, samples.length - 1)]!.timeHour;
+  const speedScore = responseTimeHours > 0 ? chemoPkClamp(100 - responseTimeHours / 6, 0, 100) : 25;
+  const overTreatmentPenalty = chemoPkClamp(Math.max(0, peakExposure - 14) * 4, 0, 100);
+  const totalScore =
     tumorReduction * 0.3 +
     toxicityBurden * 0.2 +
     survivalScore * 0.25 +
     speedScore * 0.15 +
     (100 - overTreatmentPenalty) * 0.1;
-  var grade;
+  let grade: Grade;
   if (totalScore >= 90) {
     grade = "A";
   } else if (totalScore >= 80) {
@@ -266,7 +375,7 @@ function chemoPkBuildRunSummary(samples, config) {
   } else {
     grade = "F";
   }
-  return {
+  const summary: RunSummary = {
     grade: grade,
     totalScore: Math.round(totalScore),
     tumorReduction: Math.round(tumorReduction),
@@ -276,36 +385,35 @@ function chemoPkBuildRunSummary(samples, config) {
     overTreatmentPenalty: Math.round(overTreatmentPenalty),
     mysteryTraitLabel: config.caseProfile ? config.caseProfile.mysteryTraitLabel : "",
   };
+  return summary;
 }
 
 // ============================================
 // Build the realized adverse-effects list for the current simulated sample
-function chemoPkBuildAdverseEffects(
-  regimenDrugs,
-  concentrationMap,
-  totalBurden,
-  visualState,
-  cumulativeExposureMap,
-  patientHealth,
-  config,
-  previousEffectStateMap,
-) {
-  var effectMap = {};
-  var priorStateMap = previousEffectStateMap || {};
-  var regimenProfile = config.regimenProfile || chemoPkGetRegimenProfile(config);
-  var patientProfile = config.patientProfile || {};
-  var randomnessScale = chemoPkGetRandomnessScale(config);
-  var drugIndex;
-  for (drugIndex = 0; drugIndex < regimenDrugs.length; drugIndex += 1) {
-    var drug = regimenDrugs[drugIndex];
-    var adverseEffects = drug.adverseEffects || [];
-    var exposureRatio = (concentrationMap[drug.id] || 0) / chemoPkEstimateTypicalPeak(drug, config);
-    var cumulativeRatio = cumulativeExposureMap[drug.id] || 0;
-    var effectIndex;
-    for (effectIndex = 0; effectIndex < adverseEffects.length; effectIndex += 1) {
-      var effect = adverseEffects[effectIndex];
-      if (!effectMap[effect.key]) {
-        effectMap[effect.key] = {
+export function chemoPkBuildAdverseEffects(
+  regimenDrugs: DrugDefinition[],
+  concentrationMap: Record<string, number>,
+  totalBurden: number,
+  visualState: VisualState,
+  cumulativeExposureMap: Record<string, number>,
+  patientHealth: number,
+  config: PkConfigView,
+  previousEffectStateMap?: Record<string, EffectState>,
+): AdverseEffectResult {
+  const effectMap: Record<string, AdverseEffect> = {};
+  const priorStateMap = previousEffectStateMap || {};
+  const regimenProfile = config.regimenProfile || chemoPkGetRegimenProfile(config);
+  const patientProfile: Partial<PatientProfile> = config.patientProfile || {};
+  const randomnessScale = chemoPkGetRandomnessScale(config);
+  for (const drug of regimenDrugs) {
+    const adverseEffects = drug.adverseEffects || [];
+    const exposureRatio =
+      (concentrationMap[drug.id] || 0) / chemoPkEstimateTypicalPeak(drug, config);
+    const cumulativeRatio = cumulativeExposureMap[drug.id] || 0;
+    for (const effect of adverseEffects) {
+      let entry = effectMap[effect.key];
+      if (entry === undefined) {
+        entry = {
           key: effect.key,
           label: effect.label,
           present: false,
@@ -313,9 +421,10 @@ function chemoPkBuildAdverseEffects(
           score: 0,
           sourceDrugs: [],
         };
+        effectMap[effect.key] = entry;
       }
-      effectMap[effect.key].sourceDrugs.push(drug.name);
-      var effectScore = chemoPkBuildAdverseEffectScore(
+      entry.sourceDrugs.push(drug.name);
+      let effectScore = chemoPkBuildAdverseEffectScore(
         effect.rule,
         exposureRatio,
         cumulativeRatio,
@@ -337,59 +446,65 @@ function chemoPkBuildAdverseEffects(
       if (effect.rule === "pulmonary") {
         effectScore *= 1 / Math.max(patientProfile.hepaticReserve || 1, 0.65);
       }
-      if (effectScore > effectMap[effect.key].score) {
-        effectMap[effect.key].score = effectScore;
-        effectMap[effect.key].severity = chemoPkBuildAdverseEffectSeverity(effectScore);
-        effectMap[effect.key].active = effectMap[effect.key].severity !== "green";
+      if (effectScore > entry.score) {
+        entry.score = effectScore;
+        entry.severity = chemoPkBuildAdverseEffectSeverity(effectScore);
+        entry.active = entry.severity !== "green";
       }
     }
   }
-  var effectList = [];
-  var nextEffectStateMap = {};
-  var effectKeys = Object.keys(effectMap);
-  var effectOrder = function (leftKey, rightKey) {
-    var left = effectMap[leftKey];
-    var right = effectMap[rightKey];
-    var severityRank = { red: 0, yellow: 1, green: 2 };
+  // rank by severity band, then alphabetically by label
+  const severityRank: Record<Severity, number> = { red: 0, yellow: 1, green: 2 };
+  function compareEffects(left: AdverseEffect, right: AdverseEffect): number {
     if (severityRank[left.severity] !== severityRank[right.severity]) {
       return severityRank[left.severity] - severityRank[right.severity];
     }
     return left.label.localeCompare(right.label);
-  };
-  effectKeys.sort(effectOrder);
-  for (drugIndex = 0; drugIndex < effectKeys.length; drugIndex += 1) {
-    var effectKey = effectKeys[drugIndex];
-    var previousState = priorStateMap[effectKey] || {};
-    var probability = chemoPkBuildAdverseEffectProbability(
-      effectMap[effectKey].score,
-      previousState.present,
+  }
+  const effectValues: AdverseEffect[] = [];
+  for (const key of Object.keys(effectMap)) {
+    const entry = effectMap[key];
+    if (entry !== undefined) {
+      effectValues.push(entry);
+    }
+  }
+  effectValues.sort(compareEffects);
+  const effectList: AdverseEffect[] = [];
+  const nextEffectStateMap: Record<string, EffectState> = {};
+  for (const effect of effectValues) {
+    const effectKey = effect.key;
+    const previousState = priorStateMap[effectKey];
+    const probability = chemoPkBuildAdverseEffectProbability(
+      effect.score,
+      previousState?.present,
       randomnessScale,
     );
-    var isPresent = randomnessScale === 0 ? probability >= 0.5 : chemoPkRandom() < probability;
-    var realizedSeverity = "green";
+    const isPresent = randomnessScale === 0 ? probability >= 0.5 : chemoPkRandom() < probability;
+    let realizedSeverity: Severity = "green";
     if (isPresent) {
-      realizedSeverity = effectMap[effectKey].score >= 1.2 ? "red" : "yellow";
+      realizedSeverity = effect.score >= 1.2 ? "red" : "yellow";
     }
-    effectMap[effectKey].present = isPresent;
-    effectMap[effectKey].active = isPresent;
-    effectMap[effectKey].severity = realizedSeverity;
-    effectMap[effectKey].probability = probability;
-    effectMap[effectKey].sourceDrugs.sort();
+    effect.present = isPresent;
+    effect.active = isPresent;
+    effect.severity = realizedSeverity;
+    effect.probability = probability;
+    effect.sourceDrugs.sort();
     nextEffectStateMap[effectKey] = {
       present: isPresent,
       severity: realizedSeverity,
     };
-    effectList.push(effectMap[effectKey]);
+    effectList.push(effect);
   }
-  return {
+  const result: AdverseEffectResult = {
     effects: effectList,
     effectStateMap: nextEffectStateMap,
   };
+  return result;
 }
 
 // ============================================
 // PRNG for reproducible stochastic tumor response (pedagogic noise)
-function chemoPkRandom() {
+export function chemoPkRandom(): number {
   return Math.random();
 }
 
@@ -399,14 +514,21 @@ function chemoPkRandom() {
 // doseMg: dose amount in mg
 // elapsedMinutes: time since dose administration in minutes
 // weightKg: patient weight for Vd conversion
-function chemoPkOneCompartment(drug, doseMg, elapsedMinutes, weightKg, clearanceMultiplier) {
+export function chemoPkOneCompartment(
+  drug: DrugDefinition,
+  doseMg: number,
+  elapsedMinutes: number,
+  weightKg: number,
+  clearanceMultiplier?: number,
+): number {
   // elimination rate constant: ke = ln(2) / half-life
-  var ke = (0.693 / drug.halfLifeMinutes) * (clearanceMultiplier || 1);
+  // one-compartment drugs always define halfLifeMinutes (dispatch guarantees compartments === 1)
+  const ke = (0.693 / drug.halfLifeMinutes!) * (clearanceMultiplier || 1);
   // initial concentration: C0 = dose / (Vd_L/kg * weight_kg)
-  var vdLiters = drug.vdLPerKg * weightKg;
-  var c0 = doseMg / vdLiters;
+  const vdLiters = drug.vdLPerKg * weightKg;
+  const c0 = doseMg / vdLiters;
   // exponential decay
-  var concentration = c0 * Math.exp(-ke * elapsedMinutes);
+  const concentration = c0 * Math.exp(-ke * elapsedMinutes);
   return Math.max(0, concentration);
 }
 
@@ -414,19 +536,26 @@ function chemoPkOneCompartment(drug, doseMg, elapsedMinutes, weightKg, clearance
 // Two-compartment biphasic decay: C(t) = A*e^(-alpha*t) + B*e^(-beta*t)
 // Alpha phase: rapid initial distribution
 // Beta phase: slow terminal elimination
-function chemoPkTwoCompartment(drug, doseMg, elapsedMinutes, weightKg, clearanceMultiplier) {
+export function chemoPkTwoCompartment(
+  drug: DrugDefinition,
+  doseMg: number,
+  elapsedMinutes: number,
+  weightKg: number,
+  clearanceMultiplier?: number,
+): number {
   // alpha rate from distribution half-life
-  var alphaRate = (0.693 / drug.halfLifeAlphaMinutes) * (clearanceMultiplier || 1);
+  // two-compartment drugs always define both phase half-lives (compartments === 2)
+  const alphaRate = (0.693 / drug.halfLifeAlphaMinutes!) * (clearanceMultiplier || 1);
   // beta rate from elimination half-life
-  var betaRate = (0.693 / drug.halfLifeBetaMinutes) * (clearanceMultiplier || 1);
+  const betaRate = (0.693 / drug.halfLifeBetaMinutes!) * (clearanceMultiplier || 1);
   // total initial concentration
-  var vdLiters = drug.vdLPerKg * weightKg;
-  var cTotal = doseMg / vdLiters;
+  const vdLiters = drug.vdLPerKg * weightKg;
+  const cTotal = doseMg / vdLiters;
   // split into rapid (70%) and slow (30%) components
-  var componentA = 0.7 * cTotal;
-  var componentB = 0.3 * cTotal;
+  const componentA = 0.7 * cTotal;
+  const componentB = 0.3 * cTotal;
   // biphasic decay
-  var concentration =
+  const concentration =
     componentA * Math.exp(-alphaRate * elapsedMinutes) +
     componentB * Math.exp(-betaRate * elapsedMinutes);
   return Math.max(0, concentration);
@@ -437,15 +566,15 @@ function chemoPkTwoCompartment(drug, doseMg, elapsedMinutes, weightKg, clearance
 // Dispatches to one-compartment or two-compartment based on drug properties
 // doseTimeMins: when the dose was administered (in simulation minutes)
 // currentTimeMins: current simulation time in minutes
-function chemoPkConcentrationAtTime(
-  drug,
-  doseMg,
-  doseTimeMins,
-  currentTimeMins,
-  weightKg,
-  clearanceMultiplier,
-) {
-  var elapsedMinutes = currentTimeMins - doseTimeMins;
+export function chemoPkConcentrationAtTime(
+  drug: DrugDefinition,
+  doseMg: number,
+  doseTimeMins: number,
+  currentTimeMins: number,
+  weightKg: number,
+  clearanceMultiplier?: number,
+): number {
+  const elapsedMinutes = currentTimeMins - doseTimeMins;
   // dose not yet administered
   if (elapsedMinutes < 0) {
     return 0;
@@ -459,20 +588,19 @@ function chemoPkConcentrationAtTime(
 // ============================================
 // Calculate total concentration from multiple doses using superposition
 // doses: array of {timeMins, amountMg}
-function chemoPkMultiDoseConcentration(
-  drug,
-  doses,
-  currentTimeMins,
-  weightKg,
-  clearanceMultiplier,
-) {
-  var totalConcentration = 0;
-  var index;
-  for (index = 0; index < doses.length; index += 1) {
+export function chemoPkMultiDoseConcentration(
+  drug: DrugDefinition,
+  doses: PkDose[],
+  currentTimeMins: number,
+  weightKg: number,
+  clearanceMultiplier?: number,
+): number {
+  let totalConcentration = 0;
+  for (const dose of doses) {
     totalConcentration += chemoPkConcentrationAtTime(
       drug,
-      doses[index].amountMg,
-      doses[index].timeMins,
+      dose.amountMg,
+      dose.timeMins,
       currentTimeMins,
       weightKg,
       clearanceMultiplier,
@@ -483,37 +611,41 @@ function chemoPkMultiDoseConcentration(
 
 // ============================================
 // Derive organ concentrations from plasma concentration using extraction ratios
-function chemoPkOrganConcentrations(drug, plasmaConc) {
+export function chemoPkOrganConcentrations(
+  drug: DrugDefinition,
+  plasmaConc: number,
+): { plasma: number; liver: number; kidney: number; tissue: number } {
   // determine clearance route from drug properties
-  var route = "hepatic";
+  let route: keyof ExtractionRoutes = "hepatic";
   if (drug.primaryOrgan === "kidney") {
     route = "renal";
   }
   if (drug.excretionOrgan === "bile") {
     route = "biliary";
   }
-  var liverRatio = ORGAN_EXTRACTION.liver[route];
-  var kidneyRatio = ORGAN_EXTRACTION.kidney[route];
-  var tissueRatio = ORGAN_EXTRACTION.tissue[route];
-  return {
+  const liverRatio = ORGAN_EXTRACTION.liver[route];
+  const kidneyRatio = ORGAN_EXTRACTION.kidney[route];
+  const tissueRatio = ORGAN_EXTRACTION.tissue[route];
+  const organs = {
     plasma: plasmaConc,
     liver: plasmaConc * liverRatio,
     kidney: plasmaConc * kidneyRatio,
     tissue: plasmaConc * tissueRatio,
   };
+  return organs;
 }
 
 // ============================================
 // Build simulation config from current state
-function chemoPkBuildSimulationConfig(state) {
-  var patientProfile = chemoPkBuildPatientProfile(state);
-  var regimenProfile = chemoPkGetRegimenProfile(state);
-  var doseCount = state.doseCount || chemoRegimenGetDefaultDoseCount(state.regimenId);
-  var doseIntervalDays =
+export function chemoPkBuildSimulationConfig(state: ChemoState): SimulationConfig {
+  const patientProfile = chemoPkBuildPatientProfile(state);
+  const regimenProfile = chemoPkGetRegimenProfile(state);
+  const doseCount = state.doseCount || chemoRegimenGetDefaultDoseCount(state.regimenId);
+  const doseIntervalDays =
     state.doseIntervalDays || chemoRegimenGetDefaultDoseIntervalDays(state.regimenId);
-  var lastDoseHour = Math.max(0, (doseCount - 1) * doseIntervalDays * 24);
-  var durationHours = Math.max(CHEMO_CONSTANTS.defaultDurationHours, lastDoseHour + 240);
-  return {
+  const lastDoseHour = Math.max(0, (doseCount - 1) * doseIntervalDays * 24);
+  const durationHours = Math.max(CHEMO_CONSTANTS.defaultDurationHours, lastDoseHour + 240);
+  const config: SimulationConfig = {
     regimenId: state.regimenId,
     timeStepHours: CHEMO_CONSTANTS.timeStepHours,
     durationHours: durationHours,
@@ -536,33 +668,34 @@ function chemoPkBuildSimulationConfig(state) {
     doseCount: doseCount,
     doseIntervalDays: doseIntervalDays,
   };
+  return config;
 }
 
 // ============================================
 // Build a dose map from dose events: {timeHour: {drugId: doseMg}}
-function chemoPkBuildDoseMap(doseEvents, durationHours, timeStepHours) {
-  var doseMap = {};
-  var timeHour;
-  for (timeHour = 0; timeHour <= durationHours; timeHour += timeStepHours) {
+export function chemoPkBuildDoseMap(
+  doseEvents: DoseEvent[],
+  durationHours: number,
+  timeStepHours: number,
+): Record<number, Record<string, number>> {
+  const doseMap: Record<number, Record<string, number>> = {};
+  for (let timeHour = 0; timeHour <= durationHours; timeHour += timeStepHours) {
     doseMap[timeHour] = {};
   }
-  var eventIndex;
-  for (eventIndex = 0; eventIndex < doseEvents.length; eventIndex += 1) {
-    var event = doseEvents[eventIndex];
+  for (const event of doseEvents) {
     // snap dose to nearest time step
-    var startHour = Math.floor(event.startHour / timeStepHours) * timeStepHours;
-    var endHour =
+    const startHour = Math.floor(event.startHour / timeStepHours) * timeStepHours;
+    const endHour =
       Math.ceil((event.startHour + event.durationHours) / timeStepHours) * timeStepHours;
-    var bucketCount = Math.max(1, Math.round((endHour - startHour) / timeStepHours));
-    var bucketDose = event.amountMg / bucketCount;
-    for (timeHour = startHour; timeHour < endHour; timeHour += timeStepHours) {
-      if (!doseMap[timeHour]) {
-        doseMap[timeHour] = {};
+    const bucketCount = Math.max(1, Math.round((endHour - startHour) / timeStepHours));
+    const bucketDose = event.amountMg / bucketCount;
+    for (let timeHour = startHour; timeHour < endHour; timeHour += timeStepHours) {
+      let bucket = doseMap[timeHour];
+      if (bucket === undefined) {
+        bucket = {};
+        doseMap[timeHour] = bucket;
       }
-      if (!doseMap[timeHour][event.drugId]) {
-        doseMap[timeHour][event.drugId] = 0;
-      }
-      doseMap[timeHour][event.drugId] += bucketDose;
+      bucket[event.drugId] = (bucket[event.drugId] ?? 0) + bucketDose;
     }
   }
   return doseMap;
@@ -571,12 +704,15 @@ function chemoPkBuildDoseMap(doseEvents, durationHours, timeStepHours) {
 // ============================================
 // Compute tumor response probability from total burden
 // Uses logistic function; center and spread tuned for exponential decay PK scale
-function chemoPkComputeResponseProbability(totalBurden, config) {
-  var regimenProfile = config.regimenProfile || chemoPkGetRegimenProfile(config);
-  var caseProfile = config.caseProfile || null;
-  var efficacyMultiplier =
+export function chemoPkComputeResponseProbability(
+  totalBurden: number,
+  config: PkConfigView,
+): number {
+  const regimenProfile = config.regimenProfile || chemoPkGetRegimenProfile(config);
+  const caseProfile = config.caseProfile || null;
+  const efficacyMultiplier =
     caseProfile && caseProfile.efficacyMultiplier ? caseProfile.efficacyMultiplier : 1;
-  var scaledBurden =
+  const scaledBurden =
     totalBurden *
     config.tumorSensitivity *
     efficacyMultiplier *
@@ -584,27 +720,32 @@ function chemoPkComputeResponseProbability(totalBurden, config) {
     (1.15 / config.bodyScale);
   // logistic center tuned for typical ABVD burden range
   // at burden=2 response ~50%, at burden=10 response ~90%
-  var logisticCenter = 2;
-  var logisticSpread = 2.5;
-  var baseline = 1 / (1 + Math.exp(-(scaledBurden - logisticCenter) / logisticSpread));
+  const logisticCenter = 2;
+  const logisticSpread = 2.5;
+  const baseline = 1 / (1 + Math.exp(-(scaledBurden - logisticCenter) / logisticSpread));
   // light pedagogic noise in tumor response only
-  var jitter =
+  const jitter =
     (chemoPkRandom() - 0.5) * 0.18 * regimenProfile.volatility * chemoPkGetRandomnessScale(config);
   return chemoPkClamp(baseline + jitter, 0.03, 0.97);
 }
 
 // ============================================
 // Update tumor volume based on response probability
-function chemoPkUpdateTumorVolume(currentTumorVolume, responseProbability, totalBurden, config) {
-  var tumorVolume = currentTumorVolume;
-  var randomnessScale = chemoPkGetRandomnessScale(config || {});
+export function chemoPkUpdateTumorVolume(
+  currentTumorVolume: number,
+  responseProbability: number,
+  totalBurden: number,
+  config: PkConfigView,
+): number {
+  let tumorVolume = currentTumorVolume;
+  const randomnessScale = chemoPkGetRandomnessScale(config);
   if (tumorVolume <= 0.005) {
     return 0;
   }
-  var roll = randomnessScale === 0 ? (responseProbability > 0.5 ? 0 : 1) : chemoPkRandom();
+  const roll = randomnessScale === 0 ? (responseProbability > 0.5 ? 0 : 1) : chemoPkRandom();
   if (roll < responseProbability) {
     // tumor shrinks: rate proportional to response probability
-    var killFraction =
+    let killFraction =
       0.01 + responseProbability * 0.035 + chemoPkRandom() * 0.015 * Math.max(randomnessScale, 0.2);
     killFraction += Math.min(0.3, totalBurden * 0.0045);
     tumorVolume *= 1 - Math.min(0.92, killFraction);
@@ -627,8 +768,14 @@ function chemoPkUpdateTumorVolume(currentTumorVolume, responseProbability, total
 
 // ============================================
 // Build visual state for body rendering from drug concentrations
-function chemoPkBuildVisualState(regimenDrugs, concentrationMap, totalBurden, config, tumorVolume) {
-  var visualState = {
+export function chemoPkBuildVisualState(
+  regimenDrugs: DrugDefinition[],
+  concentrationMap: Record<string, number>,
+  totalBurden: number,
+  config: PkConfigView,
+  tumorVolume: number,
+): VisualState {
+  const visualState: VisualState = {
     bloodstream: 0,
     liver: 0,
     kidney: 0,
@@ -637,10 +784,8 @@ function chemoPkBuildVisualState(regimenDrugs, concentrationMap, totalBurden, co
     tumorRadius: 54,
     tumorShrinkFraction: 0,
   };
-  var drugIndex;
-  for (drugIndex = 0; drugIndex < regimenDrugs.length; drugIndex += 1) {
-    var drug = regimenDrugs[drugIndex];
-    var concentration = concentrationMap[drug.id] || 0;
+  for (const drug of regimenDrugs) {
+    const concentration = concentrationMap[drug.id] || 0;
     visualState.bloodstream += concentration * drug.bodyAffinity.bloodstream;
     visualState.liver += concentration * drug.bodyAffinity.liver;
     visualState.kidney += concentration * drug.bodyAffinity.kidney;
@@ -648,7 +793,7 @@ function chemoPkBuildVisualState(regimenDrugs, concentrationMap, totalBurden, co
   }
   // normalize organ intensities to 0-1 range
   // use a reference scale based on typical burden levels
-  var normalizer = Math.max(totalBurden, 0.5) * 1.2;
+  const normalizer = Math.max(totalBurden, 0.5) * 1.2;
   visualState.bloodstream = Math.min(1, visualState.bloodstream / normalizer);
   visualState.liver = Math.min(1, visualState.liver / normalizer);
   visualState.kidney = Math.min(1, visualState.kidney / normalizer);
@@ -663,24 +808,25 @@ function chemoPkBuildVisualState(regimenDrugs, concentrationMap, totalBurden, co
 // ============================================
 // Update patient health based on organ burden
 // Deterministic toxicity model (no random shock for reproducibility)
-function chemoPkUpdatePatientState(
-  currentHealth,
-  totalBurden,
-  visualState,
-  config,
-  rollingToxicityLoad,
-) {
-  var resilienceMultiplier = config.resilienceMultiplier || 1;
-  var regimenProfile = config.regimenProfile || chemoPkGetRegimenProfile(config);
-  var patientProfile = config.patientProfile || {};
-  var renalReserve = patientProfile.renalReserve || 1;
-  var hepaticReserve = patientProfile.hepaticReserve || 1;
-  var marrowReserve = patientProfile.marrowReserve || 1;
-  var toxicityMemory = typeof rollingToxicityLoad === "number" ? rollingToxicityLoad : totalBurden;
+export function chemoPkUpdatePatientState(
+  currentHealth: number,
+  totalBurden: number,
+  visualState: VisualState,
+  config: PkConfigView,
+  rollingToxicityLoad?: number,
+): number {
+  const resilienceMultiplier = config.resilienceMultiplier || 1;
+  const regimenProfile = config.regimenProfile || chemoPkGetRegimenProfile(config);
+  const patientProfile: Partial<PatientProfile> = config.patientProfile || {};
+  const renalReserve = patientProfile.renalReserve || 1;
+  const hepaticReserve = patientProfile.hepaticReserve || 1;
+  const marrowReserve = patientProfile.marrowReserve || 1;
+  const toxicityMemory =
+    typeof rollingToxicityLoad === "number" ? rollingToxicityLoad : totalBurden;
   // base toxicity proportional to drug burden
-  var toxicity = (totalBurden * 0.04 * regimenProfile.acuteToxicityWeight) / resilienceMultiplier;
+  let toxicity = (totalBurden * 0.04 * regimenProfile.acuteToxicityWeight) / resilienceMultiplier;
   // organ stress from liver and kidney processing
-  var organStress =
+  let organStress =
     (visualState.liver + visualState.kidney + visualState.bloodstream) *
     ((0.8 * regimenProfile.cumulativeToxicityWeight) / resilienceMultiplier);
   organStress +=
@@ -692,7 +838,7 @@ function chemoPkUpdatePatientState(
     Math.max(0, toxicityMemory - totalBurden) * 0.012 * regimenProfile.cumulativeToxicityWeight;
   toxicity += Math.max(0, 1 - marrowReserve) * 1.4;
   // natural recovery (drops sharply when burden is high)
-  var recovery = Math.max(
+  const recovery = Math.max(
     0.1,
     ((1.2 - toxicityMemory * 0.02) * resilienceMultiplier) /
       (regimenProfile.recoveryPenalty * (1 + (1 - marrowReserve) * 0.6)),
@@ -710,13 +856,13 @@ function chemoPkUpdatePatientState(
     toxicity +=
       ((totalBurden - 80) * 0.4 * regimenProfile.cumulativeToxicityWeight) / resilienceMultiplier;
   }
-  var health = currentHealth - toxicity - organStress + recovery;
+  const health = currentHealth - toxicity - organStress + recovery;
   return chemoPkClamp(health, 0, 100);
 }
 
 // ============================================
 // Determine life status string from health value
-function chemoPkBuildLifeStatus(patientHealth) {
+export function chemoPkBuildLifeStatus(patientHealth: number): LifeStatus {
   if (patientHealth <= 0) {
     return "Deceased";
   }
@@ -735,66 +881,63 @@ function chemoPkBuildLifeStatus(patientHealth) {
 // ============================================
 // Build all simulation samples using exponential decay PK with dose superposition
 // This is the main simulation function: pre-computes the full sample array
-function chemoPkBuildSamples(config) {
-  var patientProfile = config.patientProfile || chemoPkBuildPatientProfile(config);
-  var regimenProfile = config.regimenProfile || chemoPkGetRegimenProfile(config);
+export function chemoPkBuildSamples(config: SimulationConfig): SimulationSample[] {
+  const patientProfile = config.patientProfile || chemoPkBuildPatientProfile(config);
+  const regimenProfile = config.regimenProfile || chemoPkGetRegimenProfile(config);
   config.patientProfile = patientProfile;
   config.regimenProfile = regimenProfile;
   config.bsa = patientProfile.bsa;
   config.weightKg = patientProfile.weightKg;
   config.clearanceMultiplier = patientProfile.clearanceMultiplier;
   config.resilienceMultiplier = patientProfile.resilienceMultiplier;
-  var regimen = chemoRegimenGetById(config.regimenId);
-  var randomnessScale = chemoPkGetRandomnessScale(config);
-  var doseEvents = chemoRegimenBuildDoseEvents(
+  const regimen = chemoRegimenGetById(config.regimenId);
+  const randomnessScale = chemoPkGetRandomnessScale(config);
+  const doseEvents = chemoRegimenBuildDoseEvents(
     config.regimenId,
     config.bsa,
     config.doseMultiplier,
     config.doseCount,
     config.doseIntervalDays,
   );
-  var regimenDrugs = chemoRegimenBuildDrugList(config.regimenId);
-  var weightKg = config.weightKg || SIM_DEFAULTS.patientWeightKg;
-  var clearanceMultiplier = config.clearanceMultiplier || 1;
+  const regimenDrugs = chemoRegimenBuildDrugList(config.regimenId);
+  const weightKg = config.weightKg || SIM_DEFAULTS.patientWeightKg;
+  const clearanceMultiplier = config.clearanceMultiplier || 1;
   // build per-drug dose arrays for superposition
-  var drugDoseArrays = {};
-  var drugIndex;
-  for (drugIndex = 0; drugIndex < regimenDrugs.length; drugIndex += 1) {
-    drugDoseArrays[regimenDrugs[drugIndex].id] = [];
+  const drugDoseArrays: Record<string, PkDose[]> = {};
+  for (const drug of regimenDrugs) {
+    drugDoseArrays[drug.id] = [];
   }
   // distribute dose events into per-drug arrays
-  var eventIndex;
-  for (eventIndex = 0; eventIndex < doseEvents.length; eventIndex += 1) {
-    var event = doseEvents[eventIndex];
-    if (!drugDoseArrays[event.drugId]) {
-      drugDoseArrays[event.drugId] = [];
+  for (const event of doseEvents) {
+    let doseArray = drugDoseArrays[event.drugId];
+    if (doseArray === undefined) {
+      doseArray = [];
+      drugDoseArrays[event.drugId] = doseArray;
     }
     // convert dose event startHour to minutes for internal calculation
-    drugDoseArrays[event.drugId].push({
+    doseArray.push({
       timeMins: event.startHour * 60,
       amountMg: event.amountMg,
     });
   }
-  var tumorVolume = 1.05;
-  var patientHealth = 100;
-  var samples = [];
-  var cumulativeExposureMap = {};
-  var effectStateMap = {};
-  var eventLog = [];
-  var rollingToxicityLoad = 0;
-  for (drugIndex = 0; drugIndex < regimenDrugs.length; drugIndex += 1) {
-    cumulativeExposureMap[regimenDrugs[drugIndex].id] = 0;
+  let tumorVolume = 1.05;
+  let patientHealth = 100;
+  const samples: SimulationSample[] = [];
+  const cumulativeExposureMap: Record<string, number> = {};
+  let effectStateMap: Record<string, EffectState> = {};
+  const eventLog: string[] = [];
+  let rollingToxicityLoad = 0;
+  for (const drug of regimenDrugs) {
+    cumulativeExposureMap[drug.id] = 0;
   }
-  var timeHour;
-  for (timeHour = 0; timeHour <= config.durationHours; timeHour += config.timeStepHours) {
-    var timeMins = timeHour * 60;
-    var concentrationMap = {};
-    var totalBurden = 0;
+  for (let timeHour = 0; timeHour <= config.durationHours; timeHour += config.timeStepHours) {
+    const timeMins = timeHour * 60;
+    const concentrationMap: Record<string, number> = {};
+    let totalBurden = 0;
     // calculate concentration for each drug using superposition
-    for (drugIndex = 0; drugIndex < regimenDrugs.length; drugIndex += 1) {
-      var drug = regimenDrugs[drugIndex];
-      var doses = drugDoseArrays[drug.id] || [];
-      var drugConc = chemoPkMultiDoseConcentration(
+    for (const drug of regimenDrugs) {
+      const doses = drugDoseArrays[drug.id] || [];
+      const drugConc = chemoPkMultiDoseConcentration(
         drug,
         doses,
         timeMins,
@@ -803,16 +946,18 @@ function chemoPkBuildSamples(config) {
       );
       concentrationMap[drug.id] = drugConc;
       totalBurden += drugConc;
-      cumulativeExposureMap[drug.id] +=
+      // cumulativeExposureMap[drug.id] was initialized to 0 for every regimen drug above
+      cumulativeExposureMap[drug.id] =
+        cumulativeExposureMap[drug.id]! +
         (drugConc / chemoPkEstimateTypicalPeak(drug, config)) * config.timeStepHours;
     }
-    var responseProbability = chemoPkComputeResponseProbability(totalBurden, config);
+    let responseProbability = chemoPkComputeResponseProbability(totalBurden, config);
     if (randomnessScale === 0) {
       responseProbability = chemoPkClamp((responseProbability - 0.5) * 0.8 + 0.5, 0.03, 0.97);
     }
     tumorVolume = chemoPkUpdateTumorVolume(tumorVolume, responseProbability, totalBurden, config);
     // build visual state from the updated tumor volume
-    var visualState = chemoPkBuildVisualState(
+    const visualState = chemoPkBuildVisualState(
       regimenDrugs,
       concentrationMap,
       totalBurden,
@@ -827,10 +972,10 @@ function chemoPkBuildSamples(config) {
       config,
       rollingToxicityLoad,
     );
-    var lifeStatus = chemoPkBuildLifeStatus(patientHealth);
-    var therapeuticWindowStatus = chemoPkBuildTherapeuticWindowStatus(totalBurden, config);
-    var previousSample = samples.length ? samples[samples.length - 1] : null;
-    var adverseEffectResult = chemoPkBuildAdverseEffects(
+    const lifeStatus = chemoPkBuildLifeStatus(patientHealth);
+    const therapeuticWindowStatus = chemoPkBuildTherapeuticWindowStatus(totalBurden, config);
+    const previousSample = samples.length > 0 ? (samples[samples.length - 1] ?? null) : null;
+    const adverseEffectResult = chemoPkBuildAdverseEffects(
       regimenDrugs,
       concentrationMap,
       totalBurden,
@@ -840,9 +985,9 @@ function chemoPkBuildSamples(config) {
       config,
       effectStateMap,
     );
-    var adverseEffects = adverseEffectResult.effects;
+    const adverseEffects = adverseEffectResult.effects;
     effectStateMap = adverseEffectResult.effectStateMap;
-    var sample = {
+    const sample: SimulationSample = {
       timeHour: timeHour,
       drugConcentrations: concentrationMap,
       totalBurden: totalBurden,
@@ -856,10 +1001,12 @@ function chemoPkBuildSamples(config) {
       visualState: visualState,
       rollingToxicityLoad: rollingToxicityLoad,
       regimenName: regimen.name,
+      // populated below once step events are computed for this sample
+      eventLog: [],
     };
-    var newEvents = chemoPkBuildStepEvents(previousSample, sample);
-    for (eventIndex = 0; eventIndex < newEvents.length; eventIndex += 1) {
-      eventLog.push(newEvents[eventIndex]);
+    const newEvents = chemoPkBuildStepEvents(previousSample, sample);
+    for (const entry of newEvents) {
+      eventLog.push(entry);
     }
     sample.eventLog = eventLog.slice();
     samples.push(sample);
@@ -873,22 +1020,20 @@ function chemoPkBuildSamples(config) {
 
 // ============================================
 // Find peak total burden across all samples
-function chemoPkFindPeakExposure(samples) {
-  var peak = 0;
-  var index;
-  for (index = 0; index < samples.length; index += 1) {
-    peak = Math.max(peak, samples[index].totalBurden);
+export function chemoPkFindPeakExposure(samples: SimulationSample[]): number {
+  let peak = 0;
+  for (const sample of samples) {
+    peak = Math.max(peak, sample.totalBurden);
   }
   return peak;
 }
 
 // ============================================
 // Find minimum tumor volume across all samples
-function chemoPkFindMinimumTumorVolume(samples) {
-  var minimum = 10;
-  var index;
-  for (index = 0; index < samples.length; index += 1) {
-    minimum = Math.min(minimum, samples[index].tumorVolume);
+export function chemoPkFindMinimumTumorVolume(samples: SimulationSample[]): number {
+  let minimum = 10;
+  for (const sample of samples) {
+    minimum = Math.min(minimum, sample.tumorVolume);
   }
   return minimum;
 }

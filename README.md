@@ -14,6 +14,7 @@ pharmacokinetics through named regimen presets and manual dosing.
 - [docs/USAGE.md](docs/USAGE.md): Build, serve, and test commands for the web app.
 - [docs/CODE_ARCHITECTURE.md](docs/CODE_ARCHITECTURE.md): High-level system design and data flow.
 - [docs/FILE_STRUCTURE.md](docs/FILE_STRUCTURE.md): Directory map of the repo.
+- [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md): Known issues and debugging steps.
 - [docs/CHANGELOG.md](docs/CHANGELOG.md): History of changes.
 - [docs/REPO_STYLE.md](docs/REPO_STYLE.md): Repository structure, naming, and versioning conventions.
 - [docs/TYPESCRIPT_STYLE.md](docs/TYPESCRIPT_STYLE.md): TypeScript formatting and project conventions.
@@ -21,21 +22,29 @@ pharmacokinetics through named regimen presets and manual dosing.
 
 ## Quick start
 
-Build the self-contained HTML page:
+Build the TypeScript app into the GitHub Pages artifact:
 
 ```bash
-bash build_app.sh
+./build_github_pages.sh
 ```
 
-Open [chemotherapy_body_simulation.html](chemotherapy_body_simulation.html) in a browser.
+The build compiles `src/*.ts` and emits `dist/index.html` and `dist/main.js`.
+The `dist/` directory is the GitHub Pages artifact and is not tracked in git.
 
-To develop against the GitHub Pages build with a local dev server instead:
+To preview the app locally, run the dev server, which builds and then serves
+`dist/` on a random port and opens a browser:
 
 ```bash
-bash run_web_server.sh
+./run_web_server.sh
 ```
 
 ## Testing
+
+Run the fast gate (typecheck, lint, format check, and Node module tests):
+
+```bash
+./check_codebase.sh
+```
 
 Run the pytest suite:
 
@@ -43,8 +52,8 @@ Run the pytest suite:
 pytest tests/
 ```
 
-Run the Playwright browser test suite:
+Run the Playwright browser smoke test:
 
 ```bash
-bash run_playwright_tests.sh
+./run_playwright_tests.sh
 ```

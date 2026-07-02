@@ -1,5 +1,5 @@
 // ============================================
-// constants.js -- Drug PK data, regimen presets, and simulation defaults
+// constants.ts -- Drug PK data, regimen presets, and simulation defaults
 // ============================================
 // Canonical unit system:
 //   Time: minutes (internally), display adapts to min/hr/days
@@ -9,8 +9,22 @@
 //   Half-life: minutes (stored in DRUG_DATA)
 // ============================================
 
+import type {
+  SimDefaults,
+  OrganExtraction,
+  VisualChannel,
+  OrganInfo,
+  CaseTrait,
+  DrugDefinition,
+  RegimenPreset,
+  ChemoConstants,
+  ChemoRegimenView,
+} from "./types";
+
+// ============================================
 // Default simulation parameters
-var SIM_DEFAULTS = {
+// ============================================
+export const SIM_DEFAULTS: SimDefaults = {
   patientWeightKg: 70,
   patientBSA: 1.7,
   // sample interval in minutes (2 hours)
@@ -24,7 +38,8 @@ var SIM_DEFAULTS = {
 // ============================================
 // Organ extraction ratios for deriving organ concentrations from plasma
 // Keyed by clearance route: hepatic, renal, biliary
-var ORGAN_EXTRACTION = {
+// ============================================
+export const ORGAN_EXTRACTION: OrganExtraction = {
   liver: {
     hepatic: 0.7,
     renal: 0.2,
@@ -44,14 +59,15 @@ var ORGAN_EXTRACTION = {
 
 // ============================================
 // Visual channel colors and organ info for body visualization
-var CHEMO_VIS_CHANNELS = [
+// ============================================
+export const CHEMO_VIS_CHANNELS: VisualChannel[] = [
   { key: "bloodstream", label: "Bloodstream", color: "#d65050" },
   { key: "liver", label: "Liver", color: "#dd8b3d" },
   { key: "kidney", label: "Kidneys", color: "#4a7db2" },
   { key: "tumor", label: "Tumor", color: "#7e5bd6" },
 ];
 
-var CHEMO_ORGAN_INFO = [
+export const CHEMO_ORGAN_INFO: OrganInfo[] = [
   {
     key: "bloodstream",
     label: "Bloodstream",
@@ -70,7 +86,7 @@ var CHEMO_ORGAN_INFO = [
   { key: "tumor", label: "Tumor", role: "Receives exposure that can reduce tumor mass over time." },
 ];
 
-var CHEMO_CASE_TRAITS = [
+export const CHEMO_CASE_TRAITS: CaseTrait[] = [
   {
     key: "fast_clearer",
     label: "Fast clearer",
@@ -108,7 +124,8 @@ var CHEMO_CASE_TRAITS = [
 // Source units: vdLPerKg (L/kg), halfLife in minutes, dose in mg/m2
 // Vd is converted to total L at concentration calculation time
 // Doses are converted to mg at dose-event build time using current BSA
-var DRUG_DATA = {
+// ============================================
+export const DRUG_DATA: Record<string, DrugDefinition> = {
   fluorouracil: {
     id: "fluorouracil",
     name: "5-Fluorouracil",
@@ -349,7 +366,7 @@ var DRUG_DATA = {
 };
 
 // Ordered list of drug keys for UI rendering
-var DRUG_KEYS = [
+export const DRUG_KEYS: string[] = [
   "fluorouracil",
   "doxorubicin",
   "cisplatin",
@@ -365,7 +382,8 @@ var DRUG_KEYS = [
 // ============================================
 // Chemotherapy regimen presets
 // Source doses in doseMgM2, converted to mg at dose-event build time using current BSA
-var REGIMEN_PRESETS = {
+// ============================================
+export const REGIMEN_PRESETS: Record<string, RegimenPreset> = {
   abvd: {
     id: "abvd",
     name: "ABVD",
@@ -558,13 +576,44 @@ var REGIMEN_PRESETS = {
 };
 
 // Ordered list of regimen keys for UI rendering
-var REGIMEN_KEYS = ["abvd", "folfox", "bep", "cmf"];
+export const REGIMEN_KEYS: string[] = ["abvd", "folfox", "bep", "cmf"];
+
+// ============================================
+// Build the backward-compatible per-regimen view array from REGIMEN_PRESETS.
+// Replaces the legacy IIFE builder; keeps the same fields and array order.
+// ============================================
+function buildChemoRegimenViews(): ChemoRegimenView[] {
+  const result: ChemoRegimenView[] = [];
+  for (const regimenKey of REGIMEN_KEYS) {
+    const preset = REGIMEN_PRESETS[regimenKey];
+    // every key in REGIMEN_KEYS must resolve; fail loudly if the data drifts
+    if (preset === undefined) {
+      throw new Error(`Missing regimen preset for key: ${regimenKey}`);
+    }
+    const view: ChemoRegimenView = {
+      id: preset.id,
+      name: preset.name,
+      subtitle: preset.subtitle,
+      cycleHours: preset.cycleDays * 24,
+      drugIds: preset.drugKeys,
+      tumorSite: preset.tumorSite,
+      therapeuticWindow: preset.therapeuticWindow,
+      caseGoals: preset.caseGoals,
+      teachingNotes: preset.teachingNotes,
+      warning: preset.warning,
+      // dose events generated dynamically in regimen_engine
+      doseEvents: [],
+    };
+    result.push(view);
+  }
+  return result;
+}
 
 // ============================================
 // Backward-compatible CHEMO_CONSTANTS adapter
 // Maps old structure used by game_state, chart, body_visual, ui_rendering
-// Will be removed once all modules are migrated to DRUG_DATA / REGIMEN_PRESETS
-var CHEMO_CONSTANTS = {
+// ============================================
+export const CHEMO_CONSTANTS: ChemoConstants = {
   // time step in hours for backward compat with pk_engine sample loop
   timeStepHours: SIM_DEFAULTS.timeStepMinutes / 60,
   // duration in hours
@@ -577,26 +626,5 @@ var CHEMO_CONSTANTS = {
   // drugs map (same structure as DRUG_DATA, keyed by id)
   drugs: DRUG_DATA,
   // regimens array built from REGIMEN_PRESETS
-  regimens: (function () {
-    var result = [];
-    var index;
-    for (index = 0; index < REGIMEN_KEYS.length; index += 1) {
-      var preset = REGIMEN_PRESETS[REGIMEN_KEYS[index]];
-      result.push({
-        id: preset.id,
-        name: preset.name,
-        subtitle: preset.subtitle,
-        cycleHours: preset.cycleDays * 24,
-        drugIds: preset.drugKeys,
-        tumorSite: preset.tumorSite,
-        therapeuticWindow: preset.therapeuticWindow,
-        caseGoals: preset.caseGoals,
-        teachingNotes: preset.teachingNotes,
-        warning: preset.warning,
-        // dose events generated dynamically in regimen_engine.js
-        doseEvents: [],
-      });
-    }
-    return result;
-  })(),
+  regimens: buildChemoRegimenViews(),
 };

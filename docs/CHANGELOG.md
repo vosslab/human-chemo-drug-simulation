@@ -2,6 +2,50 @@
 
 ### Additions and New Features
 
+- Completed the `parts/*.js` -> `src/*.ts` migration (Milestones 1, 3, 4, 6). Ported
+  the remaining modules to strict TypeScript ES modules with named exports and
+  explicit types: `src/types.ts` (data-shape contract), `src/constants.ts`,
+  `src/dom.ts` (typed DOM helpers that throw on a missing id), `src/regimen_engine.ts`,
+  `src/game_state.ts` (exports the shared `CHEMO_STATE` singleton plus a
+  `chemoStateReset()` test helper), `src/chart_stage.ts`, `src/body_visual.ts`,
+  `src/ui_rendering.ts`, and `src/main.ts` (the `DOMContentLoaded` entry point). Added
+  `src/index.html` (merged from the old HTML fragments, loads `main.js` as an ES
+  module) and `src/style.css`. Added tsx unit tests `tests/test_regimen_engine.mjs`
+  and `tests/test_game_state.mjs` that import `src/*.ts` directly. `./build_github_pages.sh`
+  now produces `dist/index.html` + `dist/main.js` from the single canonical build, and
+  `./check_codebase.sh` runs a real typecheck instead of skipping. Old-vs-new DOM-id
+  and control-default parity was captured in `tests/web/parity_fixture.json` (60 ids
+  and all initial control values match) before any legacy file was deleted.
+- Made `playwright.config.ts` pick a random port in the 8xxx range per run (same
+  scheme as `run_web_server.sh`) instead of a fixed port, pinning it into `PW_PORT`
+  so the webServer and worker processes agree, so a stray leftover server on one
+  port can no longer block the suite.
+- Added `playwright.config.ts` (repo root) and `tests/playwright/app_boots.spec.ts`
+  (Milestone 5 / WP-playwright), closing the `run_playwright_tests.sh` gap noted
+  earlier in this changelog. The `webServer` block runs `./build_github_pages.sh`
+  before serving `dist/` on `http://127.0.0.1:8099`, so the smoke test can never run
+  against stale build output. The spec asserts boot (populated `#chart-root`,
+  `#preset-button-grid` buttons, non-empty `#metric-life-status`) and then exercises
+  one interaction: it clicks a `.preset-button` other than the currently
+  `is-active` one, moves `#time-scrubber`, and asserts `#chart-root` and
+  `#metric-total-burden` both change from their pre-interaction snapshots. Verified
+  `npx tsc --noEmit -p tsconfig.json`, `npx tsc --noEmit -p tsconfig.lint.json`
+  (previously failed `TS18003` with no inputs; now typechecks the new spec file),
+  `npx eslint playwright.config.ts tests/playwright/app_boots.spec.ts`, and
+  `./run_playwright_tests.sh` all clean/passing. Playwright's Chromium browser was
+  already installed in the local cache; no `npx playwright install` was needed.
+- Ported the largest legacy module `parts/pk_engine.js` to strict TypeScript ESM as
+  `src/pk_engine.ts` (Milestone 2 / WP-pk), preserving all numeric behavior verbatim.
+  Exported all 28 `chemoPk*` functions as named exports with explicit parameter and
+  return types, importing values from `./constants` and `./regimen_engine` and types via
+  `import type` from `./types`. Handled `noUncheckedIndexedAccess` with loop-bound
+  non-null reads (erased at runtime, zero behavior change) and honest optional-config
+  input views; the two-compartment/one-compartment half-life reads use `!` under the
+  dispatch invariant. Added `tests/test_pk_engine.mjs` (12 `node:test` cases) that pins
+  `Math.random` to 0 and asserts golden values captured from the legacy `parts/*.js` via
+  `node:vm`, covering the PK primitives, organ routing, full-run simulations for all four
+  regimens, tumor eradication, regimen-profile effects, and the run summary. `tsc --noEmit`
+  is clean and both `.mjs` suites pass.
 - Added `docs/TROUBLESHOOTING.md` (symptoms and fixes for the `TS18003` typecheck
   failure, the broken `build_github_pages.sh` entry-point error, the repo-root build
   output path, and Playwright/Python setup) and `docs/ROADMAP.md` (near-term `parts/*.js`
@@ -62,6 +106,22 @@
 
 ### Removals and Deprecations
 
+- Retired the legacy JavaScript pipeline (Milestone 6). Deleted the `parts/` directory
+  (the concatenated `*.js` modules and HTML fragments), `build_app.sh`, and the
+  generated single-file `chemotherapy_body_simulation.html`, now that `src/*.ts` ->
+  `build_github_pages.sh` -> `dist/` is the single canonical build. Moved
+  `parts/CONTRACTS.md` to `docs/CONTRACTS.md` (normative for `src/types.ts`) and reduced
+  `eslint.config.local.js` to `export default []` (its `parts/**/*.js` and
+  `tests/web/**/*.js` blocks targeted files that no longer exist). Refreshed
+  `docs/CODE_ARCHITECTURE.md`, `docs/FILE_STRUCTURE.md`, `README.md`, `docs/INSTALL.md`,
+  `docs/USAGE.md`, `docs/ROADMAP.md`, and `docs/TROUBLESHOOTING.md` to describe the
+  single TypeScript build and drop the resolved "two pipelines / src missing" gaps.
+- Removed the brittle `test_web_build_contains_expected_sections` substring-grep test
+  and the build-invoking `test_web_build_creates_dist_artifacts` from
+  `tests/web/test_web_build.py`; per `docs/PYTEST_STYLE.md` the pytest fast lane no
+  longer runs `build_github_pages.sh` (building is covered by the Playwright smoke and
+  `check_codebase.sh`). The file keeps only the fast source-presence check. Deleted the
+  superseded vm-based `tests/web/test_pk_calibration.js`.
 - Removed the root `dist_clean.sh`; both cleaners now live only under `devel/`
   (`devel/clean_build.sh` light, `devel/dist_clean.sh` deep).
 

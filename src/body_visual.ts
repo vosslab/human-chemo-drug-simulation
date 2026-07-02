@@ -1,48 +1,107 @@
-function chemoVisualColor(channelKey, intensity) {
-  var palette = {
-    bloodstream: [214, 80, 80],
-    liver: [221, 139, 61],
-    kidney: [74, 125, 178],
-    tumor: [126, 91, 214],
-    clearance: [115, 179, 125],
-  };
-  var rgb = palette[channelKey];
-  var alpha = 0.15 + intensity * 0.8;
-  return "rgba(" + rgb[0] + "," + rgb[1] + "," + rgb[2] + "," + alpha.toFixed(2) + ")";
+// ============================================
+// body_visual.ts -- Stylized body SVG, health bar, and status pill rendering
+// ============================================
+// Ports the legacy body_visual behavior exactly: same palette, same tumor
+// geometry, same seeded PRNG arithmetic, same SVG/DOM markup shape.
+// ============================================
+
+import type { SimulationSample, TumorSite, VisualState } from "./types";
+import { CHEMO_CONSTANTS } from "./constants";
+import { chemoStateGetCurrentSample } from "./game_state";
+import { requireElement } from "./dom";
+
+// ============================================
+// Color-channel RGB triples used by chemoVisualColor, keyed by channel name.
+const CHEMO_VISUAL_PALETTE: Record<string, [number, number, number]> = {
+  bloodstream: [214, 80, 80],
+  liver: [221, 139, 61],
+  kidney: [74, 125, 178],
+  tumor: [126, 91, 214],
+  clearance: [115, 179, 125],
+};
+
+// ============================================
+// Fallback tumor site used when a regimen has no configured tumor site, or
+// the regimen name is not found. `key` is not present in the legacy JS
+// literal; TumorSite.key is required by types.ts, so a stable slug is added
+// here. `key` is never read by the SVG/DOM markup below (only label, cx, cy,
+// labelX, labelY, lineToX, lineToY are rendered), so adding it does not
+// change observable output.
+const DEFAULT_TUMOR_SITE: TumorSite = {
+  key: "default",
+  label: "Tumor",
+  cx: 226,
+  cy: 208,
+  labelX: 304,
+  labelY: 192,
+  lineToX: 300,
+  lineToY: 188,
+};
+
+// ============================================
+// Per-channel tumor/organ shading and border metrics returned by
+// chemoVisualGetTumorMetrics.
+export interface TumorMetrics {
+  responseChance: number;
+  tumorShrinkFraction: number;
+  tumorRadius: number;
 }
 
-function chemoVisualPercentText(intensity) {
-  return Math.round(intensity * 100) + "%";
+// ============================================
+// Compute an rgba() color string for a body-compartment channel at a given
+// intensity (0..1). Alpha ranges from 0.15 to 0.95.
+export function chemoVisualColor(channelKey: string, intensity: number): string {
+  const rgb = CHEMO_VISUAL_PALETTE[channelKey];
+  if (rgb === undefined) {
+    throw new Error(`Unknown body-visual channel key: ${channelKey}`);
+  }
+  const alpha = 0.15 + intensity * 0.8;
+  return `rgba(${rgb[0]},${rgb[1]},${rgb[2]},${alpha.toFixed(2)})`;
 }
 
-function chemoVisualCreateSeed(sample) {
-  var text = [sample.regimenName || "", sample.timeHour || 0, sample.totalBurden || 0].join("|");
-  var seed = 2166136261;
-  var index;
-  for (index = 0; index < text.length; index += 1) {
+// ============================================
+// Format an intensity fraction (0..1) as a rounded percent string.
+export function chemoVisualPercentText(intensity: number): string {
+  return `${Math.round(intensity * 100)}%`;
+}
+
+// ============================================
+// Derive a 32-bit FNV-1a seed from a sample's regimen name, time, and
+// total burden, so redraws of the same sample state stay visually stable.
+export function chemoVisualCreateSeed(sample: SimulationSample): number {
+  const text = [sample.regimenName || "", sample.timeHour || 0, sample.totalBurden || 0].join("|");
+  let seed = 2166136261;
+  for (let index = 0; index < text.length; index += 1) {
     seed ^= text.charCodeAt(index);
     seed = Math.imul(seed, 16777619);
   }
   return seed >>> 0;
 }
 
-function chemoVisualCreatePrng(seed) {
-  var state = seed >>> 0;
-  return function () {
+// ============================================
+// Build a deterministic linear-congruential PRNG closure from a seed.
+// Preserves the exact multiplier/increment arithmetic of the legacy JS.
+export function chemoVisualCreatePrng(seed: number): () => number {
+  let state = seed >>> 0;
+  return function nextRandom(): number {
     state = (1664525 * state + 1013904223) >>> 0;
     return state / 4294967296;
   };
 }
 
-function chemoVisualGetTumorMetrics(sample) {
-  var visualState = sample.visualState || {};
-  var responseChance =
+// ============================================
+// Derive tumor response chance, shrink fraction, and render radius for a
+// sample, falling back to deterministic formulas when the PK engine did
+// not already attach a visualState/responseProbability to the sample.
+export function chemoVisualGetTumorMetrics(sample: SimulationSample): TumorMetrics {
+  const visualState: Partial<VisualState> = sample.visualState || {};
+  let responseChance =
     typeof sample.responseProbability === "number" ? sample.responseProbability : 0;
-  var tumorShrinkFraction =
+  let tumorShrinkFraction =
     typeof visualState.tumorShrinkFraction === "number" ? visualState.tumorShrinkFraction : 0;
-  var tumorRadius = typeof visualState.tumorRadius === "number" ? visualState.tumorRadius : 60;
+  let tumorRadius = typeof visualState.tumorRadius === "number" ? visualState.tumorRadius : 60;
   if (typeof sample.responseProbability !== "number") {
-    var burdenEffect = Math.max(0, Math.min(1, (sample.totalBurden || 0) / 18));
+    const burdenEffect = Math.max(0, Math.min(1, (sample.totalBurden || 0) / 18));
     responseChance = 0.1 + burdenEffect * 0.65;
     if (responseChance < 0.03) {
       responseChance = 0.03;
@@ -52,7 +111,7 @@ function chemoVisualGetTumorMetrics(sample) {
     }
   }
   if (typeof visualState.tumorShrinkFraction !== "number") {
-    var timeResponse = Math.max(0, Math.min(1, (sample.timeHour || 0) / 336));
+    const timeResponse = Math.max(0, Math.min(1, (sample.timeHour || 0) / 336));
     tumorShrinkFraction = Math.max(0, Math.min(1, responseChance * 0.75 + timeResponse * 0.18));
   }
   if (typeof visualState.tumorRadius !== "number") {
@@ -65,52 +124,46 @@ function chemoVisualGetTumorMetrics(sample) {
   };
 }
 
-function chemoVisualGetTumorSite(regimenName) {
-  var regimenIndex;
-  for (regimenIndex = 0; regimenIndex < CHEMO_CONSTANTS.regimens.length; regimenIndex += 1) {
-    var regimen = CHEMO_CONSTANTS.regimens[regimenIndex];
+// ============================================
+// Look up the configured tumor-site geometry for a regimen by name, falling
+// back to a default center-body location when the regimen has none, or the
+// regimen name is not found among CHEMO_CONSTANTS.regimens.
+export function chemoVisualGetTumorSite(regimenName: string): TumorSite {
+  for (let regimenIndex = 0; regimenIndex < CHEMO_CONSTANTS.regimens.length; regimenIndex += 1) {
+    const regimen = CHEMO_CONSTANTS.regimens[regimenIndex];
+    if (regimen === undefined) {
+      throw new Error(`CHEMO_CONSTANTS.regimens index out of bounds at ${regimenIndex}`);
+    }
     if (regimen.name === regimenName) {
-      return (
-        regimen.tumorSite || {
-          label: "Tumor",
-          cx: 226,
-          cy: 208,
-          labelX: 304,
-          labelY: 192,
-          lineToX: 300,
-          lineToY: 188,
-        }
-      );
+      return regimen.tumorSite || DEFAULT_TUMOR_SITE;
     }
   }
-  return {
-    label: "Tumor",
-    cx: 226,
-    cy: 208,
-    labelX: 304,
-    labelY: 192,
-    lineToX: 300,
-    lineToY: 188,
-  };
+  return DEFAULT_TUMOR_SITE;
 }
 
-function chemoVisualRenderBody() {
-  var currentSample = chemoStateGetCurrentSample();
-  var visualState = currentSample.visualState;
-  var tumorMetrics = chemoVisualGetTumorMetrics(currentSample);
-  var tumorSite = chemoVisualGetTumorSite(currentSample.regimenName);
-  var root = document.getElementById("body-visual-root");
-  var statusRoot = document.getElementById("body-status-root");
-  var tumorRadius = tumorMetrics.tumorRadius.toFixed(1);
-  var tumorGlowRadius = (tumorMetrics.tumorRadius + 16).toFixed(1);
-  var tumorCoreRadius = Math.max(0, tumorMetrics.tumorRadius * 0.72).toFixed(1);
-  var patientHealth =
+// ============================================
+// Render the full body SVG diagram, the vitality health bar, and the
+// status-pill readout for the currently selected sample into their DOM roots.
+export function chemoVisualRenderBody(): void {
+  const currentSample = chemoStateGetCurrentSample();
+  if (currentSample === null) {
+    throw new Error("chemoVisualRenderBody: no current sample available to render");
+  }
+  const visualState = currentSample.visualState;
+  const tumorMetrics = chemoVisualGetTumorMetrics(currentSample);
+  const tumorSite = chemoVisualGetTumorSite(currentSample.regimenName);
+  const root = requireElement("body-visual-root");
+  const statusRoot = requireElement("body-status-root");
+  const tumorRadius = tumorMetrics.tumorRadius.toFixed(1);
+  const tumorGlowRadius = (tumorMetrics.tumorRadius + 16).toFixed(1);
+  const tumorCoreRadius = Math.max(0, tumorMetrics.tumorRadius * 0.72).toFixed(1);
+  const patientHealth =
     typeof currentSample.patientHealth === "number" ? currentSample.patientHealth : 100;
-  var lifeStatus = currentSample.lifeStatus || "Stable";
-  var bodyOpacity = Math.max(0.18, patientHealth / 100);
-  var outlineColor = lifeStatus === "Deceased" ? "#1a1a1a" : "#bfb7aa";
-  var healthBarRoot = document.getElementById("patient-health-bar-root");
-  var svg =
+  const lifeStatus = currentSample.lifeStatus || "Stable";
+  const bodyOpacity = Math.max(0.18, patientHealth / 100);
+  const outlineColor = lifeStatus === "Deceased" ? "#1a1a1a" : "#bfb7aa";
+  const healthBarRoot = requireElement("patient-health-bar-root");
+  const svg =
     "" +
     "<svg class='body-svg' viewBox='0 0 360 460' role='img' aria-label='Stylized body diagram'>" +
     "<rect x='0' y='0' width='360' height='460' rx='28' fill='#fffdf8' />" +
@@ -199,7 +252,7 @@ function chemoVisualRenderBody() {
     "</text>" +
     "</svg>";
   root.innerHTML = svg;
-  var healthColor = "#73b37d";
+  let healthColor = "#73b37d";
   if (patientHealth < 70) {
     healthColor = "#dd8b3d";
   }
