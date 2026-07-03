@@ -81,6 +81,7 @@
   distribution-clean checkout still drives a reproducible `npm ci`.
 - Repointed the `clean` npm alias in `package.json` from `./dist_clean.sh` to
   `./devel/clean_build.sh`.
+- Added a "Try it live" GitHub Pages link near the top of README.md pointing to https://vosslab.github.io/human-chemo-drug-simulation/, so readers can launch the live app in one click.
 
 ### Behavior or Interface Changes
 
