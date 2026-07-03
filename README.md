@@ -4,7 +4,7 @@ A browser-based teaching demo that visualizes chemotherapy drug concentration an
 in a simplified human body over a 30-day window, for students and instructors exploring
 pharmacokinetics through named regimen presets and manual dosing.
 
-Try it live: [vosslab.github.io/human-chemo-drug-simulation](https://vosslab.github.io/human-chemo-drug-simulation/)
+Test it out live: [vosslab.github.io/human-chemo-drug-simulation](https://vosslab.github.io/human-chemo-drug-simulation/)
 
 <!-- screenshots:begin (managed by screenshot-docs) -->
 ![Main simulation view showing regimen presets, concentration and tumor timelines, body flow view, and adverse effects panels](docs/screenshots/main_view.png)
