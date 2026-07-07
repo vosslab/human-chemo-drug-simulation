@@ -39,7 +39,8 @@ never goes stale against a sync run.
   validated by the repo's own typecheck, lint, format, and test gates before it is trusted.
 
 Required strict flags stay fixed regardless of version: `strict: true`, `noImplicitAny: true`,
-`noUncheckedIndexedAccess: true`, `target: es2020`, `module: esnext`,
+`noUncheckedIndexedAccess: true`, `noImplicitOverride: true`, `verbatimModuleSyntax: true`,
+`useUnknownInCatchVariables: true`, `target: es2020`, `module: esnext`,
 `moduleResolution: bundler`. Point at the canonical `tsconfig.json` at repo root (propagated
 from `templates/typescript/tsconfig.json`).
 
@@ -223,7 +224,7 @@ import { writeReport } from "./write_report";
 * For real projects, use a normal test framework and keep tests in a `tests/` folder.
 * Keep tests small and deterministic.
 * Avoid network calls, random behavior, and time-based logic unless mocked.
-* Browser tests live under `tests/playwright/` (see [PLAYWRIGHT_USAGE.md](PLAYWRIGHT_USAGE.md)). Pure Node unit tests via `node --test tests/test_*.mjs`. TS hygiene tests under `tests/test_typescript_*.py` enforce tsc, package.json schema, tsconfig canonical fields, and ESLint flat-config presence. ESLint correctness is gated by `check_codebase.sh` step 3 directly; no separate pytest wrapper.
+* Browser tests live under `tests/playwright/` (see the `PLAYWRIGHT_USAGE.md` doc where it ships). Pure Node unit tests via `node --test tests/test_*.mjs`. TS hygiene tests under `tests/test_typescript_*.py` enforce tsc, package.json schema, tsconfig canonical fields, and ESLint flat-config presence. ESLint correctness is gated by `check_codebase.sh` step 3 directly; no separate pytest wrapper.
 * Node unit tests are `.mjs` and run via `node --test tests/test_*.mjs` (canonical). A `.ts`
   test with the tsx loader (`node --import tsx --test`) is an accepted variant when the test
   itself needs TypeScript (`sports-life-game`).
@@ -233,12 +234,7 @@ import { writeReport } from "./write_report";
 
 ### Node test fixture policy
 
-Inline setup first. Keep durable tests on self-contained inputs such as a literal string or
-short array. Durable tests are usually smaller, clearer, and easier to maintain.
-
-Keep separate test data only when file shape, loader behavior, or shared test infrastructure
-is the behavior under test. See the Fixture policy section in PYTEST_STYLE.md for the
-canonical framing.
+Use inline setup first. For fixture cases, see the Fixture policy in PYTEST_STYLE.md.
 
 ## FORMATTERS AND LINTERS
 
@@ -311,7 +307,11 @@ path already skips typed rules via `tseslint.configs.disableTypeChecked`; this b
 
 ### Opt-in strict flags (not default)
 
-`exactOptionalPropertyTypes: true` is intentionally NOT in the default `tsconfig.json` the template ships. The flag makes `{ x?: string }` non-assignable to `{ x: string | undefined }`, which most third-party `@types/*` packages do not comply with even when `skipLibCheck: true` is set. Consumers see spurious errors from `node_modules`. A repo that wants the stricter shape can add the flag locally to its own `tsconfig.json` (which is consumer-owned after bootstrap); per-type assertions or `skipLibCheck` interactions are the consumer's responsibility once enabled.
+`exactOptionalPropertyTypes: true` is still a repo-local choice rather than a
+shared default. Some consumer repos enable it and others do not. The flag makes
+`{ x?: string }` non-assignable to `{ x: string | undefined }`, which can
+expose third-party `@types/*` mismatches even when `skipLibCheck: true` is set.
+Read the target repo's `tsconfig.json` before assuming the flag is present.
 
 A wider type-check pass covers `tests/` and `tools/` via `tsconfig.lint.json` (`extends: "./tsconfig.json"`, `include: ["tests/**/*.ts", "tools/**/*.ts"]`); `check_codebase.sh` step 2 always runs it.
 
@@ -363,7 +363,7 @@ never need to open `package.json` to learn how to drive a repo:
 - `./check_codebase.sh` (run the fast typecheck, lint, format, and unit-test gate).
 - `./build_github_pages.sh` (build the GitHub Pages bundle).
 - `./run_web_server.sh` (build and serve a local preview).
-- `./dist_clean.sh` (wipe `dist/`).
+- `./devel/clean_build.sh` (wipe `dist/`).
 - `./run_playwright_tests.sh` (build as needed, then run the Playwright
   browser tests). This is its own front door so `check_codebase.sh` stays the fast gate.
 
@@ -418,7 +418,7 @@ Alias rules:
 | `./check_codebase.sh` | `npm run check` | Typecheck, lint, format-check, Node unit tests |
 | `./build_github_pages.sh` | `npm run build` | Build the esbuild bundle into `dist/` |
 | `./run_web_server.sh` | `npm run serve` | Build and serve `dist/` on a random port |
-| `./dist_clean.sh` | `npm run clean` | Remove `dist/` |
+| `./devel/clean_build.sh` | `npm run clean` | Remove `dist/` |
 | `./run_playwright_tests.sh` | `npm run test:playwright` | Build as needed, then run Playwright browser tests |
 
 The remaining `package.json` aliases have no shell-script front door. Run their
@@ -432,8 +432,8 @@ locally-installed form (`npx ...`) so the command works without a global install
 | `npm run setup:playwright` | `./devel/setup_playwright.sh` |
 
 The `tools/html_to_pdf.mjs` HTML-to-PDF tool is run directly
-(`node tools/html_to_pdf.mjs`), documented in
-[PLAYWRIGHT_USAGE.md](PLAYWRIGHT_USAGE.md); several repos also expose an optional `pdf` npm
+(`node tools/html_to_pdf.mjs`), documented in the `PLAYWRIGHT_USAGE.md` doc
+where it ships; several repos also expose an optional `pdf` npm
 alias that mirrors it 1:1.
 
 ### Shell scripts versus Python scripts
@@ -450,7 +450,20 @@ shell wrapper only when it improves usability, never a hidden alias.
 See the shell-script/npm-alias table above for the full list of scripts and their jobs.
 Script names for reference:
 `build_github_pages.sh`, `run_web_server.sh`, `check_codebase.sh`,
-`dist_clean.sh`, `run_playwright_tests.sh`.
+`devel/clean_build.sh`, `run_playwright_tests.sh`.
+
+### Repo-local extras
+
+Consumer repos often add thin domain-specific commands beyond the shared front
+doors. Examples in the current corpus include:
+
+- `layout:*` scripts for layout metrics and diffs
+- `protocol:png` and `scene:png` for image export helpers
+- `pdf` as a thin wrapper around `node tools/html_to_pdf.mjs`
+- a `dev` command for watch-mode builds in some browser-game repos
+
+Treat these as repo-owned conveniences, not replacements for the shared
+front-door scripts.
 
 ### Module system
 
